@@ -1,0 +1,402 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>800</width>
+    <height>592</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>PDF Player</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <widget class="QTabWidget" name="tabWidget">
+      <property name="currentIndex">
+       <number>0</number>
+      </property>
+      <property name="movable">
+       <bool>false</bool>
+      </property>
+      <widget class="QWidget" name="audio_tab">
+       <attribute name="title">
+        <string>Audio</string>
+       </attribute>
+       <layout class="QHBoxLayout" name="horizontalLayout"/>
+      </widget>
+      <widget class="QWidget" name="pdf_tab">
+       <attribute name="title">
+        <string>PDF</string>
+       </attribute>
+       <layout class="QGridLayout" name="gridLayout_3">
+        <item row="0" column="0">
+         <layout class="QGridLayout" name="gridLayout_2"/>
+        </item>
+       </layout>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>800</width>
+     <height>33</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menuFile">
+    <property name="title">
+     <string>File</string>
+    </property>
+    <addaction name="actionNew_Project"/>
+    <addaction name="actionOpen"/>
+    <addaction name="actionSave"/>
+    <addaction name="actionSave_As"/>
+   </widget>
+   <widget class="QMenu" name="menuOption">
+    <property name="title">
+     <string>Options</string>
+    </property>
+    <addaction name="actionFullscreen"/>
+    <addaction name="separator"/>
+   </widget>
+   <widget class="QMenu" name="menuImport">
+    <property name="title">
+     <string>Import</string>
+    </property>
+    <addaction name="actionImportPDF"/>
+    <addaction name="actionImportAudio"/>
+   </widget>
+   <widget class="QMenu" name="menuEdit">
+    <property name="title">
+     <string>Edit</string>
+    </property>
+    <widget class="QMenu" name="menuDelete_Practice_Marker">
+     <property name="title">
+      <string>Delete Practice (Red) Marker</string>
+     </property>
+     <addaction name="actionDelete_Previous_Practice_Marker"/>
+     <addaction name="actionDelete_Next_Practice_Marker"/>
+    </widget>
+    <widget class="QMenu" name="menuDelete_Page_Blue_Marker">
+     <property name="title">
+      <string>Delete Page (Blue) Marker</string>
+     </property>
+     <addaction name="actionDelete_Previous_Page_Marker"/>
+     <addaction name="actionDelete_Next_Page_Marker"/>
+    </widget>
+    <addaction name="menuDelete_Page_Blue_Marker"/>
+    <addaction name="menuDelete_Practice_Marker"/>
+    <addaction name="separator"/>
+    <addaction name="actionDelete_All_Markers"/>
+   </widget>
+   <addaction name="menuFile"/>
+   <addaction name="menuImport"/>
+   <addaction name="menuEdit"/>
+   <addaction name="menuOption"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <widget class="QToolBar" name="toolBar">
+   <property name="windowTitle">
+    <string>toolBar</string>
+   </property>
+   <property name="iconSize">
+    <size>
+     <width>30</width>
+     <height>30</height>
+    </size>
+   </property>
+   <property name="floatable">
+    <bool>true</bool>
+   </property>
+   <attribute name="toolBarArea">
+    <enum>TopToolBarArea</enum>
+   </attribute>
+   <attribute name="toolBarBreak">
+    <bool>false</bool>
+   </attribute>
+   <addaction name="actionNew_Project"/>
+   <addaction name="actionOpen"/>
+   <addaction name="actionSave"/>
+   <addaction name="actionSave_As"/>
+   <addaction name="separator"/>
+   <addaction name="actionImportPDF"/>
+   <addaction name="actionImportAudio"/>
+   <addaction name="separator"/>
+   <addaction name="actionStop"/>
+   <addaction name="actionPlay"/>
+   <addaction name="actionPrevious_Practice_Marker"/>
+   <addaction name="actionNext_Practice_Marker"/>
+   <addaction name="separator"/>
+   <addaction name="actionPrevious_Page"/>
+   <addaction name="actionNext_Page"/>
+  </widget>
+  <action name="actionOpen">
+   <property name="icon">
+    <iconset theme="document-open"/>
+   </property>
+   <property name="text">
+    <string>Open Project [Ctrl+O]</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+O</string>
+   </property>
+  </action>
+  <action name="actionSave_As">
+   <property name="icon">
+    <iconset theme="document-save-as"/>
+   </property>
+   <property name="text">
+    <string>Save As [Ctrl+Shift+S]</string>
+   </property>
+   <property name="iconText">
+    <string>Save As [Ctrl+Shift+S]</string>
+   </property>
+   <property name="toolTip">
+    <string>Save As [Ctrl+Shift+S]</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+S</string>
+   </property>
+  </action>
+  <action name="actionImportAudio">
+   <property name="icon">
+    <iconset theme="audio-card"/>
+   </property>
+   <property name="text">
+    <string>Import Audio [Ctrl+K]</string>
+   </property>
+   <property name="toolTip">
+    <string>Import Audio [Ctrl+K]</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+K</string>
+   </property>
+  </action>
+  <action name="actionImportPDF">
+   <property name="icon">
+    <iconset theme="accessories-dictionary"/>
+   </property>
+   <property name="text">
+    <string>Import PDF [Ctrl+I]</string>
+   </property>
+   <property name="toolTip">
+    <string>Import PDF</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+I</string>
+   </property>
+  </action>
+  <action name="actionFullscreen">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="icon">
+    <iconset theme="view-fullscreen"/>
+   </property>
+   <property name="text">
+    <string>Fullscreen [F]</string>
+   </property>
+   <property name="toolTip">
+    <string>Fullscreen [F]</string>
+   </property>
+   <property name="shortcut">
+    <string>F</string>
+   </property>
+  </action>
+  <action name="actionPlay">
+   <property name="icon">
+    <iconset theme="media-playback-start"/>
+   </property>
+   <property name="text">
+    <string>Play [Spacebar]</string>
+   </property>
+   <property name="shortcut">
+    <string>Space</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionNext_Practice_Marker">
+   <property name="icon">
+    <iconset theme="media-seek-forward"/>
+   </property>
+   <property name="text">
+    <string>Next Practice Marker [Right Arrow]</string>
+   </property>
+   <property name="toolTip">
+    <string>Next Practice Marker [Right Arrow]</string>
+   </property>
+   <property name="shortcut">
+    <string>Right</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionPrevious_Practice_Marker">
+   <property name="icon">
+    <iconset theme="media-seek-backward"/>
+   </property>
+   <property name="text">
+    <string>Previous Marker [Left Arrow]</string>
+   </property>
+   <property name="toolTip">
+    <string>Previous Marker [Left Arrow]</string>
+   </property>
+   <property name="shortcut">
+    <string>Left</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionNext_Page">
+   <property name="icon">
+    <iconset theme="edit-redo"/>
+   </property>
+   <property name="text">
+    <string>Next Page [Up Arrow]</string>
+   </property>
+   <property name="toolTip">
+    <string>Next Page [Up Arrow]</string>
+   </property>
+   <property name="shortcut">
+    <string>Up</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionPrevious_Page">
+   <property name="icon">
+    <iconset theme="edit-undo"/>
+   </property>
+   <property name="text">
+    <string>Previous Page [Down Arrow]</string>
+   </property>
+   <property name="toolTip">
+    <string>Previous Page [Down Arrow]</string>
+   </property>
+   <property name="shortcut">
+    <string>Down</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionSave">
+   <property name="icon">
+    <iconset theme="document-save"/>
+   </property>
+   <property name="text">
+    <string>Save Project [Ctrl+S]</string>
+   </property>
+   <property name="iconText">
+    <string>Save</string>
+   </property>
+   <property name="toolTip">
+    <string>Save Project [Ctrl+S]</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+S</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionStop">
+   <property name="icon">
+    <iconset theme="media-playback-stop"/>
+   </property>
+   <property name="text">
+    <string>Stop</string>
+   </property>
+   <property name="toolTip">
+    <string>Stop</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionExit_Fullscreen">
+   <property name="icon">
+    <iconset theme="go-down"/>
+   </property>
+   <property name="text">
+    <string>Minimize</string>
+   </property>
+   <property name="toolTip">
+    <string>Exit Fullscreen</string>
+   </property>
+   <property name="shortcut">
+    <string>Esc</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionNew_Project">
+   <property name="icon">
+    <iconset theme="document-new"/>
+   </property>
+   <property name="text">
+    <string>New Project [Ctrl+F]</string>
+   </property>
+  </action>
+  <action name="actionDelete_All_Markers">
+   <property name="icon">
+    <iconset theme="user-trash"/>
+   </property>
+   <property name="text">
+    <string>Delete All Markers [Shift+Del]</string>
+   </property>
+   <property name="shortcut">
+    <string>Shift+Del</string>
+   </property>
+  </action>
+  <action name="actionDelete_Previous_Practice_Marker">
+   <property name="text">
+    <string>Previous Marker [Alt+Left Arrow]</string>
+   </property>
+   <property name="shortcut">
+    <string>Alt+Left</string>
+   </property>
+  </action>
+  <action name="actionDelete_Next_Practice_Marker">
+   <property name="text">
+    <string>Next Marker [Alt+Right Arrow]</string>
+   </property>
+   <property name="shortcut">
+    <string>Alt+Right</string>
+   </property>
+  </action>
+  <action name="actionDelete_Previous_Page_Marker">
+   <property name="text">
+    <string>Previous Page Marker [Alt+Down]</string>
+   </property>
+   <property name="shortcut">
+    <string>Alt+Down</string>
+   </property>
+  </action>
+  <action name="actionDelete_Next_Page_Marker">
+   <property name="text">
+    <string>Next Page Marker [Alt+Up]</string>
+   </property>
+   <property name="shortcut">
+    <string>Alt+Up</string>
+   </property>
+  </action>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
