@@ -4,8 +4,14 @@ from pathlib import Path
 import pickle
 import os
 import logging
+import platform
 
-NUMBA_CACHE_DIR = Path().resolve() / "numba"
+if platform.system() == "Windows":
+    APPDATA_LOCAL = Path(os.getenv("LOCALAPPDATA")).joinpath("pdf_player")
+else:
+    APPDATA_LOCAL = Path(os.getenv("XDG_DATA_HOME", "~/.local/share")).expanduser().joinpath("pdf_player")
+
+NUMBA_CACHE_DIR = APPDATA_LOCAL / "numba"
 NUMBA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 os.environ["NUMBA_CACHE_DIR"] = str(NUMBA_CACHE_DIR)
 
@@ -19,7 +25,7 @@ from widgets.audio_player import AudioPlayer, Song
 from widgets.graphics import GraphicsView, AudioMarkerType
 from widgets.pdf import PdfView
 
-DEBUG = True
+DEBUG = False
 
 LOG_LEVEL = logging.INFO
 log = logging.getLogger()
@@ -133,7 +139,7 @@ class MainWindow(QMainWindow):
 
         if DEBUG:
             # TODO; Add a recent files thing, and option to last saved file on load.
-            self._open_path = Path("E:\\Pycharm Projects\\pdf_player\\pdf_player\\test_resources\\save\\Air_Crysalis_Animals_as_Leaders.pkl")
+            self._open_path = Path("E:\\developer\\repos\\pdf_player\\test_resources\\save\\Air_Crysalis_Animals_as_Leaders.pkl")
             self._load_markers(self._open_path)
 
     def _warning(self, title, text, accept=QMessageBox.StandardButton.Ok, cancel=QMessageBox.StandardButton.Cancel):

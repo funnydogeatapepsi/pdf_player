@@ -228,11 +228,11 @@ class GraphicsScene(QGraphicsScene):
         if marker_index > 0:
             # self.active_page = marker_index-1
             marker = self.page_markers[marker_index-1]
-        elif marker_index == 0:
+        else: # marker_index == 0:
             marker = AudioMarker(line_index=0, scrubber_index=0,
                                  line_width=self.line_width, marker_type=AudioMarkerType.PAGE)
-        else:
-            raise IndexError(f"marker_index out of range: {marker_index=}")
+        # else:
+        #     raise IndexError(f"marker_index out of range: {marker_index=}")
         return marker
 
     def next_page(self):
@@ -319,7 +319,7 @@ class GraphicsScene(QGraphicsScene):
             if marker_type == AudioMarkerType.PRACTICE:
                 marker_inds -= 1
 
-            err_tol = 10e-5
+            err_tol = 1e-3
             marker_error = scrubber_coord - marker_coords
             argmin_error = np.argmin(marker_error ** 2)     # Find nearest marker
             marker_candidate = marker_inds[argmin_error]
