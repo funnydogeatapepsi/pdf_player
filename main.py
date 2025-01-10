@@ -256,9 +256,9 @@ class MainWindow(QMainWindow):
 
             pdf_path = self._pdf_path
             song_path = self.audio_player.current_song.file_path
-            page_marker_times = [self.graphics_scene.scrubber_to_time(*marker.scrubber_coords)
+            page_marker_times = [self.graphics_scene.scrubber_to_time(*marker.scrubber_coords)/self.graphics_scene.song_duration
                                  for marker in self.graphics_scene.page_markers]
-            practice_marker_times = [self.graphics_scene.scrubber_to_time(*marker.scrubber_coords)
+            practice_marker_times = [self.graphics_scene.scrubber_to_time(*marker.scrubber_coords)/self.graphics_scene.song_duration
                                   for marker in self.graphics_scene.practice_markers]
             project = Project(song_path=song_path,
                               page_marker_times=page_marker_times,
@@ -273,7 +273,7 @@ class MainWindow(QMainWindow):
             if self.graphics_scene.markers_exist:
                 title, text, = "Create new project?", "This will delete any existing markers and create a new project."
                 accepted = self._warning(title, text)
-                if accepted:
+                if not accepted:
                     return
 
             self.graphics_scene.clear_markers()
@@ -299,7 +299,7 @@ class MainWindow(QMainWindow):
             title = "Open different project?"
             text = "This will delete any existing markers and open a different project."
             accepted = self._warning(title, text)
-            if accepted:
+            if not accepted:
                 return
 
         log.info(f"Opening Project {load_path}.")

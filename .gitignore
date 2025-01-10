@@ -3,3 +3,4 @@
 *.pdf
 /build/build/
 /build/dist/
+*.pkl

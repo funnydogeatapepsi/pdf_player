@@ -388,7 +388,6 @@ class GraphicsScene(QGraphicsScene):
         self.reset_scrubber_position()
 
         self.audio_metadata = self._audio_player.current_song.metadata
-        self.load_markers()
         if self.scrubber_time_ms is not None:
             log.debug(f"{self.scrubber_time_ms=}, {self._audio_player.duration()=}")
             self._audio_player.setPosition(self.scrubber_time_ms)
@@ -528,13 +527,15 @@ class GraphicsScene(QGraphicsScene):
                  f'{self.audio_metadata.duration}')
 
         if len(self._load_practice_marker_times) > 0:
-            practice_marker_scrub_coords = [self.time_to_scrubber(marker_time) for marker_time in self._load_practice_marker_times]
+            practice_marker_scrub_coords = [self.time_to_scrubber(marker_time*self.song_duration)
+                                            for marker_time in self._load_practice_marker_times]
             for practice_marker_scrub in practice_marker_scrub_coords:
                 self.insert_marker(practice_marker_scrub[0], practice_marker_scrub[1], marker_type=AudioMarkerType.PRACTICE)
             self._load_practice_marker_times = []
 
         if len(self._load_page_marker_times) > 0:
-            marker_scrub_coords = [self.time_to_scrubber(marker_time) for marker_time in self._load_page_marker_times]
+            marker_scrub_coords = [self.time_to_scrubber(marker_time*self.song_duration)
+                                   for marker_time in self._load_page_marker_times]
             for marker_scrub in marker_scrub_coords:
                 self.insert_marker(marker_scrub[0], marker_scrub[1], marker_type=AudioMarkerType.PAGE)
             self._load_page_marker_times = []
