@@ -162,8 +162,8 @@ class MainWindow(QMainWindow):
         return accepted
 
     def _connect_graphics(self):
-        self.m_ui.actionAdd_Practice_Marker.connect(lambda: self.graphics_scene._add_marker_at_scrubber(None, add_practice=True))
-        self.m_ui.actionAdd_Page_Marker.connect(lambda: self.graphics_scene._add_marker_at_scrubber(None, add_practice=False))
+        self.m_ui.actionAdd_Practice_Marker.triggered.connect(lambda: self.graphics_scene._add_marker_at_scrubber(None, add_practice=True))
+        self.m_ui.actionAdd_Page_Marker.triggered.connect(lambda: self.graphics_scene._add_marker_at_scrubber(None, add_practice=False))
 
     def _connect_tool_bar(self):
         volume_label = QLabel('100', self)
