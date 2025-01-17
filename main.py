@@ -17,7 +17,7 @@ os.environ["NUMBA_CACHE_DIR"] = str(NUMBA_CACHE_DIR)
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QSlider, QFileDialog, QMessageBox, QLabel)
 from PySide6.QtMultimedia import QMediaPlayer
-from PySide6.QtCore import QUrl, Qt, QPointF, Signal
+from PySide6.QtCore import QUrl, Qt, QPointF, Signal, QSettings
 from PySide6.QtGui import QIcon
 
 from windows.mainwindow import Ui_MainWindow
@@ -25,7 +25,7 @@ from widgets.audio_player import AudioPlayer, Song
 from widgets.graphics import GraphicsView, AudioMarkerType
 from widgets.pdf import PdfView
 
-DEBUG = False
+DEBUG = True
 
 LOG_LEVEL = logging.INFO
 log = logging.getLogger()
@@ -100,6 +100,13 @@ class GenericSlider(QSlider):
         super().setValue(value)
         self.valueChanged.emit(self.value())
 
+# class SettingsDialog(QSettings):
+#     FILE_LOC = str(DATA_DIR / "settings.ini")
+#     # todo probably need to set this per project. Have it be provided by the project.
+#
+#     def __init__(self, parent=None):
+#         super().__init__(self.FILE_LOC, QSettings.Format.IniFormat, parent)
+
 
 class MainWindow(QMainWindow):
     _save_path = None
@@ -111,6 +118,7 @@ class MainWindow(QMainWindow):
 
         self.m_ui = Ui_MainWindow()
         self.m_ui.setupUi(self)
+        self.WINDOW_TITLE = self.windowTitle()
 
         # Create Audio Player:
         self.audio_player = AudioPlayer(parent=self)
@@ -136,17 +144,26 @@ class MainWindow(QMainWindow):
         self._connect_tool_bar()
         self._connect_menu()
         self._connect_audio_player()
+        self._connect_graphics()
+
+        self.show()
+        self.raise_()
 
         if DEBUG:
             # TODO; Add a recent files thing, and option to last saved file on load.
-            self._open_path = Path("E:\\developer\\repos\\pdf_player\\test_resources\\save\\Air_Crysalis_Animals_as_Leaders.pkl")
+            self._open_path = Path("E:\\developer\\repos\\pdf_player\\test_resources\\save\\Air_Chrysalis_Animals_as_Leaders.pkl")
             self._load_markers(self._open_path)
+
 
     def _warning(self, title, text, accept=QMessageBox.StandardButton.Ok, cancel=QMessageBox.StandardButton.Cancel):
         reply = QMessageBox.warning(self, title, text, accept, cancel)
         log.info(f"{reply=}")
         accepted = reply == accept
         return accepted
+
+    def _connect_graphics(self):
+        self.m_ui.actionAdd_Practice_Marker.connect(lambda: self.graphics_scene._add_marker_at_scrubber(None, add_practice=True))
+        self.m_ui.actionAdd_Page_Marker.connect(lambda: self.graphics_scene._add_marker_at_scrubber(None, add_practice=False))
 
     def _connect_tool_bar(self):
         volume_label = QLabel('100', self)
@@ -267,6 +284,7 @@ class MainWindow(QMainWindow):
             with open(self._save_path, 'wb') as f:
                 pickle.dump(project, f)
 
+            self.setWindowTitle(f"{self.WINDOW_TITLE} - {self._save_path}")
             log.info(f"Saved Project as {self._save_path}.")
 
         def _new_project():
@@ -276,15 +294,21 @@ class MainWindow(QMainWindow):
                 if not accepted:
                     return
 
+            self.setWindowTitle(self.WINDOW_TITLE)
+
             self.graphics_scene.clear_markers()
             self.m_ui.actionImportAudio.trigger()
             self.m_ui.actionImportPDF.trigger()
-            self.m_ui.actionSave.trigger()
+            self.m_ui.actionSave_As.trigger()
+
+        def _options():
+            pass
 
         self.m_ui.actionSave.triggered.connect(lambda x: _save_markers(save_as=False))
         self.m_ui.actionSave_As.triggered.connect(lambda x: _save_markers(save_as=True))
         self.m_ui.actionOpen.triggered.connect(self._load_markers)
         self.m_ui.actionNew_Project.triggered.connect(_new_project)
+        self.m_ui.actionProject_Options.triggered.connect(_options)
 
     def _load_markers(self, load_path=Path('')):
         if isinstance(load_path, bool) or load_path is None:
@@ -309,6 +333,8 @@ class MainWindow(QMainWindow):
         with open(load_path, "rb") as f:
             project = pickle.load(f)
 
+        self.setWindowTitle(f"{self.WINDOW_TITLE} - {self._save_path}")
+
         song_path = project.song_path
         page_marker_times = project.page_marker_times
         practice_marker_times = project.practice_marker_times
@@ -324,6 +350,8 @@ class MainWindow(QMainWindow):
         if song_path is not None:
             self.audio_player.current_song = Song(file_url=QUrl().fromLocalFile(song_path))
 
+    def keyPressEvent(self, event):
+        self.graphics_scene.keyPressEvent(event)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -65,6 +65,7 @@
     <property name="title">
      <string>Options</string>
     </property>
+    <addaction name="actionProject_Options"/>
     <addaction name="actionFullscreen"/>
     <addaction name="separator"/>
    </widget>
@@ -93,6 +94,8 @@
      <addaction name="actionDelete_Previous_Page_Marker"/>
      <addaction name="actionDelete_Next_Page_Marker"/>
     </widget>
+    <addaction name="actionAdd_Page_Marker"/>
+    <addaction name="actionAdd_Practice_Marker"/>
     <addaction name="menuDelete_Page_Blue_Marker"/>
     <addaction name="menuDelete_Practice_Marker"/>
     <addaction name="separator"/>
@@ -133,10 +136,13 @@
    <addaction name="separator"/>
    <addaction name="actionStop"/>
    <addaction name="actionPlay"/>
+   <addaction name="separator"/>
    <addaction name="actionPrevious_Practice_Marker"/>
+   <addaction name="actionAdd_Practice_Marker"/>
    <addaction name="actionNext_Practice_Marker"/>
    <addaction name="separator"/>
    <addaction name="actionPrevious_Page"/>
+   <addaction name="actionAdd_Page_Marker"/>
    <addaction name="actionNext_Page"/>
   </widget>
   <action name="actionOpen">
@@ -394,6 +400,48 @@
    </property>
    <property name="shortcut">
     <string>Alt+Up</string>
+   </property>
+  </action>
+  <action name="actionAdd_Page_Marker">
+   <property name="icon">
+    <iconset theme="media-flash"/>
+   </property>
+   <property name="text">
+    <string>Add Page Marker</string>
+   </property>
+   <property name="toolTip">
+    <string>Add Page Marker [Ctrl + Space]</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionAdd_Practice_Marker">
+   <property name="icon">
+    <iconset theme="appointment-new"/>
+   </property>
+   <property name="text">
+    <string>Add Practice Marker</string>
+   </property>
+   <property name="toolTip">
+    <string>Add Practice Marker [Shift + Space]</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
+   </property>
+  </action>
+  <action name="actionProject_Options">
+   <property name="icon">
+    <iconset theme="applications-development"/>
+   </property>
+   <property name="text">
+    <string>Project Options</string>
+   </property>
+   <property name="toolTip">
+    <string>Modify the Project settings</string>
+   </property>
+   <property name="menuRole">
+    <enum>QAction::MenuRole::NoRole</enum>
    </property>
   </action>
  </widget>

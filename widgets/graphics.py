@@ -1,11 +1,12 @@
 import logging
 from time import time
+from typing import Union
 from enum import Enum
 
 from PySide6.QtWidgets import (QGraphicsScene, QGraphicsLineItem, QGraphicsRectItem, QGraphicsView,
-                               QGraphicsSceneMouseEvent, QMessageBox, QGraphicsPathItem, QGraphicsPixmapItem)
+                               QGraphicsSceneMouseEvent, QMessageBox, QGraphicsPathItem, QGraphicsPixmapItem, QGraphicsItemGroup)
 from PySide6.QtCore import Qt, QPointF, Signal
-from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPixmap, QPainter
+from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPixmap, QPainter, QKeyEvent
 
 import numpy as np
 
@@ -19,25 +20,62 @@ class AudioMarkerType(Enum):
     PAGE = 1
 
 
-class AudioMarker(QGraphicsRectItem):
-    audio_color = Qt.GlobalColor.red
+class AudioMarker(QGraphicsItemGroup):
+    practice_color = Qt.GlobalColor.red
     page_color = Qt.GlobalColor.blue
 
-    pen = QPen(Qt.GlobalColor.black, 2, Qt.PenStyle.SolidLine)
+    show_marker_style = QColor(250, 0, 0, 100)
+    SHOW_MARKER = False
 
     def __init__(self, line_index, scrubber_index,  line_width=10, marker_type=AudioMarkerType.PRACTICE):
-        super().__init__(0, 0, max(3, int(line_width / 3)), int(line_width * 1.5))
-        self.setPen(self.pen)
+        super().__init__()
 
-        if marker_type == AudioMarkerType.PRACTICE:
-            color = self.audio_color
-        else:
-            color = self.page_color
+        # Setup Graphics:
+        color = self.practice_color if marker_type == AudioMarkerType.PRACTICE else self.page_color
+        pen = QPen(Qt.GlobalColor.black, 2, Qt.PenStyle.SolidLine)
         brush = QBrush(color, Qt.BrushStyle.SolidPattern)
 
-        self.setBrush(brush)
+        width, height = max(2, int(line_width / 5)), int(line_width)
+        hitbox = QGraphicsRectItem(0, 0, width, height)
+        hitbox.setPen(QPen(Qt.PenStyle.NoPen))
+        if not self.SHOW_MARKER:
+            self.show_marker_style = Qt.BrushStyle.NoBrush
+        hitbox.setBrush(QBrush(self.show_marker_style))
+        hitbox.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        hitbox.setAcceptHoverEvents(False)
+        hitbox.setFlag(self.GraphicsItemFlag.ItemStacksBehindParent)
+
+        arrow_height = 15
+        arrow_width = int(arrow_height * 0.66)
+        vertical_inset = - int(arrow_height * 0.5)
+        painter_path = QPainterPath()
+        painter_path.moveTo(width/2 - arrow_width, line_width/2 - arrow_height + vertical_inset)
+        painter_path.lineTo(width/2 - arrow_width, line_width/2 - arrow_height + vertical_inset)
+        painter_path.lineTo(width/2, line_width/2 + vertical_inset)
+        painter_path.lineTo(width/2 + arrow_width, line_width/2 - arrow_height + vertical_inset)
+        painter_path.lineTo(width/2 - arrow_width, line_width/2 - arrow_height + vertical_inset)
+        marker_arrow = QGraphicsPathItem(painter_path)
+        marker_arrow.setPen(pen)
+        marker_arrow.setBrush(brush)
+        marker_arrow.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        marker_arrow.setAcceptHoverEvents(False)
+        marker_arrow.setFlag(self.GraphicsItemFlag.ItemStacksBehindParent)
+
+        self.hitbox = hitbox
+        self.marker_arrow = marker_arrow
         self._scrubber_coords = (line_index, scrubber_index)
         self.marker_type = marker_type
+
+        self.addToGroup(hitbox)
+        self.addToGroup(marker_arrow)
+
+    def items(self, parent_first=False):
+        items = self.childItems()
+        if parent_first:
+            items.insert(0, self)
+        else:
+            items.append(self)
+        return items
 
     @property
     def scrubber_coords(self):
@@ -120,6 +158,10 @@ class GraphicsScene(QGraphicsScene):
             self.audio_lines.append(audio_line)
 
         self.scrubber = QGraphicsRectItem(0, 0, 5, int(self.line_width * 1.5 - 2))
+        self.scrubber.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.scrubber.setAcceptTouchEvents(False)
+        self.scrubber.setAcceptHoverEvents(False)
+
         scrubber_brush = QBrush(self.scrubber_color, Qt.BrushStyle.SolidPattern)
         scrubber_pen = QPen(Qt.GlobalColor.black, 1, Qt.PenStyle.SolidLine)
         self.scrubber.setPen(scrubber_pen)
@@ -346,7 +388,7 @@ class GraphicsScene(QGraphicsScene):
         line: QGraphicsLineItem
 
         pos_y = line.boundingRect().center().y()
-        pos_x = (line.boundingRect().center().x() + line.boundingRect().width() * (scrubber_index-0.5))
+        pos_x = line.boundingRect().x() + line.boundingRect().width() * scrubber_index
         return QPointF(pos_x, pos_y)
 
     def time_to_scrubber(self, time_ms):
@@ -470,8 +512,8 @@ class GraphicsScene(QGraphicsScene):
         log.debug(f"Adding marker at position: {line_index=}, {scrubber_index=}, {marker_type=}")
 
         marker_line_pos = self.scrubber_to_pos(line_index, scrubber_index)
-        marker_pos = marker_line_pos - QPointF((marker.boundingRect().width() - 1)/2,
-                                               marker.boundingRect().height()/2)
+        marker_rect = marker.hitbox.boundingRect()
+        marker_pos = marker_line_pos - QPointF(marker_rect.width()/2, marker_rect.height()/2)
         marker.setPos(marker_pos)
         if marker_type == AudioMarkerType.PRACTICE:
             self._practice_markers.append(marker)
@@ -486,10 +528,13 @@ class GraphicsScene(QGraphicsScene):
                                         f"{self._n_page_markers} of {self.n_pages} possible.")
                 return
 
-        self.addItem(marker)
+        for item in marker.items(parent_first=True):
+            self.addItem(item)
 
     def remove_marker(self, marker: AudioMarker):
-        self.removeItem(marker)
+        for item in marker.items(parent_first=False):
+            self.removeItem(item)
+
         marker_ind = self._get_marker_index(marker)
 
         if marker.marker_type == AudioMarkerType.PRACTICE:
@@ -617,3 +662,29 @@ class GraphicsScene(QGraphicsScene):
             elif (event.modifiers() == Qt.KeyboardModifier.ControlModifier and
                   event.button() == Qt.MouseButton.LeftButton):
                 self.insert_marker(line_index, scrubber_index, marker_type=AudioMarkerType.PAGE)
+
+    def keyPressEvent(self, event:QKeyEvent):
+        self._add_marker_at_scrubber(event)
+
+    def _add_marker_at_scrubber(self, event:Union[QGraphicsSceneMouseEvent, QKeyEvent, None], add_practice=None):
+        # Else add at scrubber if left-click + shift/ctrl
+        time_ms = self._audio_player.position()
+        line_index, scrubber_index = self.time_to_scrubber(time_ms)
+        if isinstance(event, QGraphicsSceneMouseEvent):
+            add_practice_marker = (event.button() == Qt.MouseButton.LeftButton and event.modifiers() == Qt.KeyboardModifier.ShiftModifier)
+            add_page_marker = (event.button() == Qt.MouseButton.LeftButton and event.modifiers() == Qt.KeyboardModifier.ControlModifier)
+        elif isinstance(event, QKeyEvent):
+            add_practice_marker = event.key() == Qt.Key.Key_Space and event.modifiers() == Qt.KeyboardModifier.ShiftModifier
+            add_page_marker = event.key() == Qt.Key.Key_Space and event.modifiers() == Qt.KeyboardModifier.ControlModifier
+        elif event is None:
+            add_practice_marker = add_practice
+            add_page_marker = not add_practice
+        else:
+            raise TypeError(f"{type(event)} not supported.")
+
+        if add_practice_marker:
+            # insert practice marker at line index and scrubber index
+            self.insert_marker(line_index, scrubber_index, marker_type=AudioMarkerType.PRACTICE)
+        elif add_page_marker:
+            self.insert_marker(line_index, scrubber_index, marker_type=AudioMarkerType.PAGE)
+
