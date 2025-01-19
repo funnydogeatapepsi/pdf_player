@@ -22,7 +22,7 @@ from PySide6.QtGui import QIcon
 
 from windows.mainwindow import Ui_MainWindow
 from widgets.audio_player import AudioPlayer, Song
-from widgets.graphics import GraphicsView, AudioMarkerType
+from widgets.graphics import GraphicsView, AudioMarker
 from widgets.pdf import PdfView
 
 DEBUG = True
@@ -137,7 +137,8 @@ class MainWindow(QMainWindow):
         # Set up volume bar:
         self.volume_bar = GenericSlider(parent=self)
         # set up speed bar:
-        self.playbackspeed_bar = GenericSlider(parent=self, tick_rate=5)
+        self.playbackspeed_bar = GenericSlider(parent=self, tick_rate=5, max_value=200)
+        self.playbackspeed_bar.setValue(100)
 
         self.file_dialog = QFileDialog(self)
 
@@ -152,6 +153,7 @@ class MainWindow(QMainWindow):
         if DEBUG:
             # TODO; Add a recent files thing, and option to last saved file on load.
             self._open_path = Path("E:\\developer\\repos\\pdf_player\\test_resources\\save\\Air_Chrysalis_Animals_as_Leaders.pkl")
+            # self._open_path = Path("E:\\developer\\repos\\pdf_player\\test_resources\\save\\Plini-Flaneur.pkl")
             self._load_markers(self._open_path)
 
 
@@ -166,17 +168,21 @@ class MainWindow(QMainWindow):
         self.m_ui.actionAdd_Page_Marker.triggered.connect(lambda: self.graphics_scene._add_marker_at_scrubber(None, add_practice=False))
 
     def _connect_tool_bar(self):
+        volume_text_label = QLabel('Volume:\t', self)
         volume_label = QLabel('100', self)
         self.volume_bar.valueChanged.connect(lambda x: volume_label.setText(str(x)))
         self.m_ui.toolBar.addSeparator()
+        self.m_ui.toolBar.addWidget(volume_text_label)
         self.m_ui.toolBar.addWidget(volume_label)
         self.m_ui.toolBar.addSeparator()
         self.m_ui.toolBar.addWidget(self.volume_bar)
         self.m_ui.toolBar.orientationChanged.connect(self.volume_bar.setOrientation)
 
+        playbackspeed_text_label = QLabel('Playback Speed:\t', self)
         playbackspeed_label = QLabel('100%', self)
-        self.playbackspeed_bar.valueChanged.connect(lambda x: playbackspeed_label.setText(str(x) + '%'))
+        self.playbackspeed_bar.valueChanged.connect(lambda x: playbackspeed_label.setText(f"{x:3d}%"))
         self.m_ui.toolBar.addSeparator()
+        self.m_ui.toolBar.addWidget(playbackspeed_text_label)
         self.m_ui.toolBar.addWidget(playbackspeed_label)
         self.m_ui.toolBar.addSeparator()
         self.m_ui.toolBar.addWidget(self.playbackspeed_bar)
@@ -186,7 +192,7 @@ class MainWindow(QMainWindow):
         # Connect audio controls
         self.volume_bar.valueChanged.connect(lambda x:
                                              self.audio_player.audio_output.setVolume(x/self.volume_bar.MAX_VALUE))
-        self.playbackspeed_bar.end_value_signal.connect(lambda x: self.audio_player.setPlaybackRate(x/self.playbackspeed_bar.MAX_VALUE))
+        self.playbackspeed_bar.end_value_signal.connect(lambda x: self.audio_player.setPlaybackRate(x/100))
 
         def toggle_audio():
             if self.audio_player.isPlaying():
@@ -201,16 +207,16 @@ class MainWindow(QMainWindow):
                 self.m_ui.actionPlay.setIcon(QIcon(QIcon.fromTheme(u"media-playback-start")))
 
         def _clear_next_practice_marker():
-            self.graphics_scene.clear_next_marker(marker_type=AudioMarkerType.PRACTICE)
+            self.graphics_scene.clear_next_marker(marker_type=AudioMarker.TYPE.PRACTICE)
 
         def _clear_previous_practice_marker():
-            self.graphics_scene.clear_previous_marker(marker_type=AudioMarkerType.PRACTICE)
+            self.graphics_scene.clear_previous_marker(marker_type=AudioMarker.TYPE.PRACTICE)
 
         def _clear_next_page_marker():
-            self.graphics_scene.clear_next_marker(marker_type=AudioMarkerType.PAGE)
+            self.graphics_scene.clear_next_marker(marker_type=AudioMarker.TYPE.PAGE)
 
         def _clear_previous_page_marker():
-            self.graphics_scene.clear_previous_marker(marker_type=AudioMarkerType.PAGE)
+            self.graphics_scene.clear_previous_marker(marker_type=AudioMarker.TYPE.PAGE)
 
         self.m_ui.actionPlay.triggered.connect(toggle_audio)
         self.audio_player.playbackStateChanged.connect(set_icon)
@@ -352,6 +358,8 @@ class MainWindow(QMainWindow):
 
     def keyPressEvent(self, event):
         self.graphics_scene.keyPressEvent(event)
+        if not event.isAccepted():
+            super().keyPressEvent(event)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
