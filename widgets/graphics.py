@@ -635,12 +635,13 @@ class GraphicsScene(QGraphicsScene):
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent):
         clicked_item = self.itemAt(event.scenePos(), self.parent().transform())
         item_type = GraphicsType.get_item_type(clicked_item)
+        log.info(f"mouseMoveEvent: {item_type=}, {clicked_item=}")
 
         if self._unlock_markers and item_type == GraphicsType.MARKER.name:
             clicked_item.scrubber_coords = self.pos_to_scrubber(event.scenePos())
             return
 
-        left_click = (event.button() == Qt.MouseButton.LeftButton and event.modifiers() == Qt.KeyboardModifier.NoModifier)
+        left_click = (Qt.MouseButton.LeftButton in event.buttons() and event.modifiers() == Qt.KeyboardModifier.NoModifier)
         if left_click and item_type in [GraphicsType.LINE.name, GraphicsType.SCRUBBER.name]:
             # Determine line and scrubber index:
             self._set_audio_player_scrubber_coords(*self.pos_to_scrubber(event.scenePos()))
@@ -648,6 +649,7 @@ class GraphicsScene(QGraphicsScene):
     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent):
         clicked_item = self.itemAt(event.scenePos(), self.parent().transform())
         item_type = GraphicsType.get_item_type(clicked_item)
+        log.info(f"mouseReleaseEvent: {item_type=}, {clicked_item=}")
 
         if self._unlock_markers and item_type == GraphicsType.MARKER.name:
             clicked_item.scrubber_coords = self.pos_to_scrubber(event.scenePos())

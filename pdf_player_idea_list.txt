@@ -5,6 +5,8 @@ TODO LIST;
 	+ Something to improve quality of slowed audio (Phase Vocoder?)
 	+ breakout config
 	+ Spotify support? https://spotipy.readthedocs.io/en/2.25.0/
+    + Skip to marker not working anymore - happens when toolbar actions are hidden...
+
 
 self.views()[0].itemAt(self.views()[0].mapFromScene(event.scenePos()))
 

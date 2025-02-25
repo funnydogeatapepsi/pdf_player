@@ -15,7 +15,7 @@ NUMBA_CACHE_DIR = APPDATA_LOCAL / "numba"
 NUMBA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 os.environ["NUMBA_CACHE_DIR"] = str(NUMBA_CACHE_DIR)
 
-from PySide6.QtWidgets import (QApplication, QMainWindow, QSlider, QFileDialog, QMessageBox, QLabel)
+from PySide6.QtWidgets import (QApplication, QMainWindow, QSlider, QFileDialog, QMessageBox, QLabel, QMenu)
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtCore import QUrl, Qt, QPointF, Signal, QSettings
 from PySide6.QtGui import QIcon
@@ -113,6 +113,8 @@ class MainWindow(QMainWindow):
     _open_path = None
     _pdf_path = None
 
+    _hide_toolbar_items = False
+
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
 
@@ -146,6 +148,8 @@ class MainWindow(QMainWindow):
         self._connect_menu()
         self._connect_audio_player()
         self._connect_graphics()
+
+        self.hide_toolbar_items(True)
 
         self.show()
         self.raise_()
@@ -360,6 +364,31 @@ class MainWindow(QMainWindow):
         self.graphics_scene.keyPressEvent(event)
         if not event.isAccepted():
             super().keyPressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+
+        if event.button() == Qt.MouseButton.RightButton and event.modifiers() == Qt.KeyboardModifier.NoModifier:
+            context_menu = QMenu()
+            hide_action = context_menu.addAction("Hide Toolbar Items")
+            hide_action.setCheckable(True)
+            hide_action.setChecked(self._hide_toolbar_items)
+            hide_action.toggled.connect(self.hide_toolbar_items)
+            context_menu.exec(event.globalPos())
+
+    def hide_toolbar_items(self, toggled):
+        # TODO; should add in same positions every time toggled. make an actions dict or something?
+        # TODO; is there a way to hide but keep enabled???
+        hide_actions = [self.m_ui.actionAdd_Page_Marker, self.m_ui.actionAdd_Practice_Marker,
+                        self.m_ui.actionNext_Page, self.m_ui.actionNext_Practice_Marker,
+                        self.m_ui.actionPrevious_Page, self.m_ui.actionPrevious_Practice_Marker]
+        self._hide_toolbar_items = toggled
+        if toggled:
+            for action in hide_actions:
+                self.m_ui.toolBar.removeAction(action)
+        else:
+            for action in hide_actions:
+                self.m_ui.toolBar.addAction(action)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
