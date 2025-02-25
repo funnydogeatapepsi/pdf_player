@@ -51,7 +51,6 @@ dependencies:
       - scikit-learn==1.4.2
       - scipy==1.13.0
       - shiboken6==6.7.0
-      - simpleaudio==1.0.4
       - soundfile==0.12.1
       - soxr==0.3.7
       - termcolor==2.5.0
