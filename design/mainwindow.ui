@@ -126,14 +126,6 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="actionNew_Project"/>
-   <addaction name="actionOpen"/>
-   <addaction name="actionSave"/>
-   <addaction name="actionSave_As"/>
-   <addaction name="separator"/>
-   <addaction name="actionImportPDF"/>
-   <addaction name="actionImportAudio"/>
-   <addaction name="separator"/>
    <addaction name="actionStop"/>
    <addaction name="actionPlay"/>
    <addaction name="separator"/>

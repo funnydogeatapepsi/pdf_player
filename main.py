@@ -379,9 +379,10 @@ class MainWindow(QMainWindow):
     def hide_toolbar_items(self, toggled):
         # TODO; should add in same positions every time toggled. make an actions dict or something?
         # TODO; is there a way to hide but keep enabled???
-        hide_actions = [self.m_ui.actionAdd_Page_Marker, self.m_ui.actionAdd_Practice_Marker,
-                        self.m_ui.actionNext_Page, self.m_ui.actionNext_Practice_Marker,
-                        self.m_ui.actionPrevious_Page, self.m_ui.actionPrevious_Practice_Marker]
+        # hide_actions = [self.m_ui.actionAdd_Page_Marker, self.m_ui.actionAdd_Practice_Marker,
+        #                 self.m_ui.actionNext_Page, self.m_ui.actionNext_Practice_Marker,
+        #                 self.m_ui.actionPrevious_Page, self.m_ui.actionPrevious_Practice_Marker]
+        hide_actions = []
         self._hide_toolbar_items = toggled
         if toggled:
             for action in hide_actions:
