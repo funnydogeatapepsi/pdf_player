@@ -146,7 +146,8 @@ class GraphicsScene(QGraphicsScene):
     @page_markers.setter
     def page_markers(self, page_marker_list):
         self._page_markers = self._sort_markers(page_marker_list)
-        self._n_page_markers = len(page_marker_list)+1
+        self._n_page_markers = len(page_marker_list)
+        self.reset_marker_numbers()
 
     @property
     def n_pages(self):
@@ -480,7 +481,6 @@ class GraphicsScene(QGraphicsScene):
             self.practice_markers = self._practice_markers
         else:
             if self._n_page_markers < self.n_pages:
-                marker.page_index = self._n_page_markers + 1
                 self._page_markers.append(marker)
                 self.page_markers = self._page_markers
             else:
@@ -513,6 +513,12 @@ class GraphicsScene(QGraphicsScene):
             log.debug(f"Removing page marker {marker_ind=}")
             self._page_markers.pop(marker_ind)
             self._n_page_markers = len(self._page_markers)
+
+        self.reset_marker_numbers()
+
+    def reset_marker_numbers(self):
+        for k_marker, marker in enumerate(self.page_markers):
+            marker.page_index = k_marker+1
 
     def _get_marker_index(self, marker: AudioMarker):
         if marker.marker_type == AudioMarker.TYPE.PRACTICE:

@@ -1,9 +1,9 @@
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union
 import logging
 
 from PySide6.QtWidgets import QGraphicsSceneMouseEvent, QGraphicsPathItem, QGraphicsItemGroup, QGraphicsRectItem, \
-    QGraphicsTextItem, QGraphicsSimpleTextItem
+    QGraphicsTextItem, QGraphicsSimpleTextItem, QGraphicsScene
 from PySide6.QtCore import Qt, QPointF, Signal
 from PySide6.QtGui import QPen, QBrush, QColor, QPainterPath, QPixmap, QPainter, QKeyEvent, QFont
 
@@ -32,6 +32,7 @@ class AudioMarker(QGraphicsItemGroup):
     _arrow_height = 23
     _arrow_width = int(_arrow_height * 0.6)
     _vertical_inset = - int(_arrow_height * 0.5)
+
     def __init__(self, line_index, scrubber_index,  line_width=10, marker_type=AudioMarkerType.PRACTICE):
         super().__init__()
 
@@ -90,7 +91,7 @@ class AudioMarker(QGraphicsItemGroup):
             items.append(self)
         return items
 
-    def scene(self) -> 'GraphicsScene':
+    def scene(self) -> Union['GraphicsScene', QGraphicsScene]:
         return super().scene()
 
     @property
@@ -109,6 +110,8 @@ class AudioMarker(QGraphicsItemGroup):
     @page_index.setter
     def page_index(self, page_index_):
         self._page_index = int(page_index_)
+
+        self.clear_child_items()
         number_graphics = QGraphicsSimpleTextItem(str(self._page_index))
         number_graphics.setParentItem(self.marker_arrow)
         number_graphics.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
@@ -120,6 +123,12 @@ class AudioMarker(QGraphicsItemGroup):
     def setPos(self, pos: QPointF):
         marker_rect = self.hitbox.boundingRect()
         super().setPos(pos - QPointF(marker_rect.width()/2, marker_rect.height()/2))
+
+    def clear_child_items(self):
+        child_items = self.marker_arrow.childItems()
+        if child_items and len(child_items) > 0 and self.scene():
+            for item in child_items:
+                self.scene().removeItem(item)
 
 
 class Scrubber(QGraphicsRectItem):

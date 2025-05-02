@@ -1,10 +1,14 @@
 # This Python file uses the following encoding: utf-8
 import sys
 from pathlib import Path
+from typing import Union
+from copy import deepcopy
 import pickle
 import os
 import logging
 import platform
+import json
+import numpy as np
 
 if platform.system() == "Windows":
     APPDATA_LOCAL = Path(os.getenv("LOCALAPPDATA")).joinpath("pdf_player")
@@ -18,7 +22,7 @@ os.environ["NUMBA_CACHE_DIR"] = str(NUMBA_CACHE_DIR)
 from PySide6.QtWidgets import (QApplication, QMainWindow, QSlider, QFileDialog, QMessageBox, QLabel, QMenu)
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtCore import QUrl, Qt, QPointF, Signal, QSettings
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QAction
 
 from windows.mainwindow import Ui_MainWindow
 from widgets.audio_player import AudioPlayer, Song
@@ -34,9 +38,11 @@ stream_handler.setFormatter(logging.Formatter('%(levelname)s - %(name)s:%(funcNa
 log.setLevel(LOG_LEVEL)
 log.addHandler(stream_handler)
 
-DATA_DIR = Path(os.getenv('LOCALAPPDATA')) / ".pdf_player"
+DATA_DIR = Path("~/AppData/Roaming").expanduser() / ".pdf_player"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+RECENT_PROJECTS_JSON = DATA_DIR / 'recents.json'
+MAX_RECENT_PROJECTS = 15
 
 class Project:
     """
@@ -107,13 +113,13 @@ class GenericSlider(QSlider):
 #     def __init__(self, parent=None):
 #         super().__init__(self.FILE_LOC, QSettings.Format.IniFormat, parent)
 
-
 class MainWindow(QMainWindow):
     _save_path = None
     _open_path = None
     _pdf_path = None
 
     _hide_toolbar_items = False
+    _recent_projects = []
 
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
@@ -150,16 +156,22 @@ class MainWindow(QMainWindow):
         self._connect_graphics()
 
         self.hide_toolbar_items(True)
+        self.update_recent_projects(None)
+
+        if len(self._recent_projects) > 0:
+            self._open_path = self._recent_projects[0]
+            self._load_markers(self._open_path)
 
         self.show()
         self.raise_()
 
-        if DEBUG:
-            # TODO; Add a recent files thing, and option to last saved file on load.
-            self._open_path = Path("E:\\developer\\repos\\pdf_player\\test_resources\\save\\Air_Chrysalis_Animals_as_Leaders.pkl")
-            # self._open_path = Path("E:\\developer\\repos\\pdf_player\\test_resources\\save\\Plini-Flaneur.pkl")
-            self._load_markers(self._open_path)
-
+        # if DEBUG:
+        #     # TODO; Add a recent files thing, and option to last saved file on load.
+        #     self._open_path = Path("E:\\developer\\repos\\pdf_player\\test_resources\\save\\Anup_Sastry_Where_Belong.pkl")
+        #     # self._open_path = Path("E:\\developer\\repos\\pdf_player\\test_resources\\save\\Periphery_MK_Ultra.pkl")
+        #     # self._open_path = Path("E:\\developer\\repos\\pdf_player\\test_resources\\save\\Air_Chrysalis_Animals_as_Leaders.pkl")
+        #     # self._open_path = Path("E:\\developer\\repos\\pdf_player\\test_resources\\save\\Plini-Flaneur.pkl")
+        #     self._load_markers(self._open_path)
 
     def _warning(self, title, text, accept=QMessageBox.StandardButton.Ok, cancel=QMessageBox.StandardButton.Cancel):
         reply = QMessageBox.warning(self, title, text, accept, cancel)
@@ -336,14 +348,17 @@ class MainWindow(QMainWindow):
             if not accepted:
                 return
 
-        log.info(f"Opening Project {load_path}.")
+        if self._open_path != load_path:
+            self.update_recent_projects(load_path)
+
         self._open_path = load_path
         self._save_path = load_path
         self.graphics_scene.clear_markers()
+        self.setWindowTitle(f"{self.WINDOW_TITLE} - {self._save_path}")
+
+        log.info(f"Opening Project {load_path}.")
         with open(load_path, "rb") as f:
             project = pickle.load(f)
-
-        self.setWindowTitle(f"{self.WINDOW_TITLE} - {self._save_path}")
 
         song_path = project.song_path
         page_marker_times = project.page_marker_times
@@ -390,6 +405,49 @@ class MainWindow(QMainWindow):
         else:
             for action in hide_actions:
                 self.m_ui.toolBar.addAction(action)
+
+    def update_recent_projects(self, load_path: Path | None):
+        if RECENT_PROJECTS_JSON.exists():
+            with open(RECENT_PROJECTS_JSON, "r") as file:
+                data = json.load(file)
+            recent_projects = data['recent_projects']
+        else:
+            data = {}
+            recent_projects = []
+
+        if load_path:
+            recent_projects.insert(0, str(load_path))
+
+        if len(recent_projects) > 0:
+            unique_paths, unique_inds = np.unique(recent_projects, return_index=True)
+            sorted_unique_paths = unique_paths[unique_inds.argsort()]
+            self._recent_projects = [Path(path_str).resolve() for path_str in sorted_unique_paths]
+
+        def remove_action_via_path(filepath):
+            recent_actions = self.m_ui.menuRecent_Projects.actions()
+            is_in_actions = [filepath == action.text() for action in recent_actions]
+            if any(is_in_actions):
+                remove_actions = [action for action, in_actions in zip(recent_actions, is_in_actions) if in_actions]
+                for action in remove_actions:
+                    self.m_ui.menuRecent_Projects.removeAction(action)
+
+        if len(self._recent_projects) == MAX_RECENT_PROJECTS:
+            removed_path = self._recent_projects.pop()
+            remove_action_via_path(removed_path)
+
+        for project_path in self._recent_projects:
+            filename = project_path.name
+            remove_action_via_path(filename)
+
+            recent_action = QAction(str(filename), self)
+            recent_action.triggered.connect(lambda checked, x=project_path: self._load_markers(x))
+            self.m_ui.menuRecent_Projects.addAction(recent_action)
+
+        if load_path:
+            data['recent_projects'] = [str(path) for path in self._recent_projects]
+            with open(RECENT_PROJECTS_JSON, 'w') as json_file:
+                json.dump(data, json_file, indent=4)
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
