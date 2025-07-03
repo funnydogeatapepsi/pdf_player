@@ -149,6 +149,7 @@ class MainWindow(QMainWindow):
         self.playbackspeed_bar.setValue(100)
 
         self.file_dialog = QFileDialog(self)
+        self.msg_box = QMessageBox(self)
 
         self._connect_tool_bar()
         self._connect_menu()
@@ -158,12 +159,12 @@ class MainWindow(QMainWindow):
         self.hide_toolbar_items(True)
         self.update_recent_projects(None)
 
+        self.show()
+        self.raise_()
+
         if len(self._recent_projects) > 0:
             self._open_path = self._recent_projects[0]
             self._load_markers(self._open_path)
-
-        self.show()
-        self.raise_()
 
         # if DEBUG:
         #     # TODO; Add a recent files thing, and option to last saved file on load.
@@ -174,7 +175,13 @@ class MainWindow(QMainWindow):
         #     self._load_markers(self._open_path)
 
     def _warning(self, title, text, accept=QMessageBox.StandardButton.Ok, cancel=QMessageBox.StandardButton.Cancel):
-        reply = QMessageBox.warning(self, title, text, accept, cancel)
+        reply = self.msg_box.warning(self, title, text, accept, cancel)
+        log.info(f"{reply=}")
+        accepted = reply == accept
+        return accepted
+
+    def _critical(self, title, text, accept=QMessageBox.StandardButton.Ok, cancel=QMessageBox.StandardButton.Cancel):
+        reply = self.msg_box.critical(self, title, text, accept, cancel)
         log.info(f"{reply=}")
         accepted = reply == accept
         return accepted
@@ -254,61 +261,6 @@ class MainWindow(QMainWindow):
                 self.showNormal()
         self.m_ui.actionFullscreen.toggled.connect(_toggle_fullscreen)
 
-        def _import_audio():
-            file_url = self.file_dialog.getOpenFileUrl(self, caption="Import Audio File",
-                                                       filter="Audio (*.m4a *.mp3 *.wav *.FLAC)")[0]
-            filepath = Path(file_url.path()[1:])
-            if (file_url is None) or (file_url == '') or (not filepath.exists()):
-                log.debug("No import path specified.")
-                return
-
-            self.audio_player.current_song = Song(file_url=file_url)
-            self.graphics_scene.clear_markers()
-
-        def _import_pdf():
-            file_url = self.file_dialog.getOpenFileUrl(self, caption="Import PDF File", filter="PDF (*.pdf)")[0]
-            filepath = Path(file_url.path()[1:])
-            if (file_url is None) or (file_url == '') or (not filepath.exists()):
-                log.debug("No import path specified.")
-                return
-            self.pdf_viewer.load(str(filepath))
-            self._pdf_path = str(filepath)
-
-        self.m_ui.actionImportAudio.triggered.connect(_import_audio)
-        self.m_ui.actionImportPDF.triggered.connect(_import_pdf)
-
-        def _save_markers(save_as=False):
-            if self.audio_player.current_song.is_empty:
-                log.info("No song currently loaded... Audio is required in order to save.")
-                # todo; maybe in the future we could create a version that works on its own time base.
-                #       (normalize to [0, 1]) users would set the duration and then they can add markers to
-                #       automate page turns.
-                return
-
-            if save_as or (self._save_path is None):
-                filesave = self.file_dialog.getSaveFileUrl(self, caption="Save Project", filter="pkl (*.pkl)")[0]
-                self._save_path = filesave.path()[1:]
-
-            if (self._save_path is None) or (self._save_path == ''):
-                log.info("No output path specified.")
-                return
-
-            pdf_path = self._pdf_path
-            song_path = self.audio_player.current_song.file_path
-            page_marker_times = [self.graphics_scene.scrubber_to_time(*marker.scrubber_coords)/self.graphics_scene.song_duration
-                                 for marker in self.graphics_scene.page_markers]
-            practice_marker_times = [self.graphics_scene.scrubber_to_time(*marker.scrubber_coords)/self.graphics_scene.song_duration
-                                  for marker in self.graphics_scene.practice_markers]
-            project = Project(song_path=song_path,
-                              page_marker_times=page_marker_times,
-                              practice_marker_times=practice_marker_times,
-                              pdf_path=pdf_path)
-            with open(self._save_path, 'wb') as f:
-                pickle.dump(project, f)
-
-            self.setWindowTitle(f"{self.WINDOW_TITLE} - {self._save_path}")
-            log.info(f"Saved Project as {self._save_path}.")
-
         def _new_project():
             if self.graphics_scene.markers_exist:
                 title, text, = "Create new project?", "This will delete any existing markers and create a new project."
@@ -326,11 +278,66 @@ class MainWindow(QMainWindow):
         def _options():
             pass
 
-        self.m_ui.actionSave.triggered.connect(lambda x: _save_markers(save_as=False))
-        self.m_ui.actionSave_As.triggered.connect(lambda x: _save_markers(save_as=True))
+        self.m_ui.actionImportAudio.triggered.connect(self._import_audio)
+        self.m_ui.actionImportPDF.triggered.connect(self._import_pdf)
+        self.m_ui.actionSave.triggered.connect(lambda x: self._save_markers(save_as=False))
+        self.m_ui.actionSave_As.triggered.connect(lambda x: self._save_markers(save_as=True))
         self.m_ui.actionOpen.triggered.connect(self._load_markers)
         self.m_ui.actionNew_Project.triggered.connect(_new_project)
         self.m_ui.actionProject_Options.triggered.connect(_options)
+
+    def _import_audio(self, clear_markers=True):
+        file_url = self.file_dialog.getOpenFileUrl(self, caption="Import Audio - Select a audio file to continue",
+                                                   filter="Audio (*.m4a *.mp3 *.wav *.FLAC)")[0]
+        filepath = Path(file_url.path()[1:])
+        if (file_url is None) or (file_url == '') or (not filepath.exists()):
+            log.debug("No import path specified.")
+            return
+
+        self.audio_player.current_song = Song(file_url=file_url)
+        if clear_markers:
+            self.graphics_scene.clear_markers()
+
+    def _import_pdf(self):
+        file_url = self.file_dialog.getOpenFileUrl(self, caption="Import PDF -  select a PDF to continue", filter="PDF (*.pdf)")[0]
+        filepath = Path(file_url.path()[1:])
+        if (file_url is None) or (file_url == '') or (not filepath.exists()):
+            log.debug("No import path specified.")
+            return
+        self.pdf_viewer.load(str(filepath))
+        self._pdf_path = str(filepath)
+
+    def _save_markers(self, save_as=False):
+        if self.audio_player.current_song.is_empty:
+            log.info("No song currently loaded... Audio is required in order to save.")
+            # todo; maybe in the future we could create a version that works on its own time base.
+            #       (normalize to [0, 1]) users would set the duration and then they can add markers to
+            #       automate page turns.
+            return
+
+        if save_as or (self._save_path is None):
+            filesave = self.file_dialog.getSaveFileUrl(self, caption="Save Project", filter="pkl (*.pkl)")[0]
+            self._save_path = filesave.path()[1:]
+
+        if (self._save_path is None) or (self._save_path == ''):
+            log.info("No output path specified.")
+            return
+
+        pdf_path = self._pdf_path
+        song_path = self.audio_player.current_song.file_path
+        page_marker_times = [self.graphics_scene.scrubber_to_time(*marker.scrubber_coords)/self.graphics_scene.song_duration
+                             for marker in self.graphics_scene.page_markers]
+        practice_marker_times = [self.graphics_scene.scrubber_to_time(*marker.scrubber_coords)/self.graphics_scene.song_duration
+                              for marker in self.graphics_scene.practice_markers]
+        project = Project(song_path=song_path,
+                          page_marker_times=page_marker_times,
+                          practice_marker_times=practice_marker_times,
+                          pdf_path=pdf_path)
+        with open(self._save_path, 'wb') as f:
+            pickle.dump(project, f)
+
+        self.setWindowTitle(f"{self.WINDOW_TITLE} - {self._save_path}")
+        log.info(f"Saved Project as {self._save_path}.")
 
     def _load_markers(self, load_path=Path('')):
         if isinstance(load_path, bool) or load_path is None:
@@ -365,15 +372,35 @@ class MainWindow(QMainWindow):
         practice_marker_times = project.practice_marker_times
         pdf_path = project.pdf_path
 
+        imported_new_file = False
         if pdf_path is not None:
-            self.pdf_viewer.load(pdf_path)
-            self._pdf_path = pdf_path
+            if Path(pdf_path).exists():
+                self.pdf_viewer.load(pdf_path)
+                self._pdf_path = pdf_path
+            else:
+                title = "File not found."
+                text = f"The pdf file {pdf_path} was not found. Would you like to import a different file?"
+                accepted = self._critical(title, text)
+                if accepted:
+                    self._import_pdf()
+                    imported_new_file = True
 
         if page_marker_times is not None:
             self.graphics_scene.set_markers(page_marker_times, practice_marker_times)
 
         if song_path is not None:
-            self.audio_player.current_song = Song(file_url=QUrl().fromLocalFile(song_path))
+            if Path(song_path).exists():
+                self.audio_player.current_song = Song(file_url=QUrl().fromLocalFile(song_path))
+            else:
+                title = "File not found."
+                text = f"The audio file {song_path} was not found. Would you like to import a different file?"
+                accepted = self._critical(title, text)
+                if accepted:
+                    self._import_audio(clear_markers=False)
+                    imported_new_file = True
+
+        if imported_new_file:
+            self.m_ui.actionSave.trigger()
 
     def keyPressEvent(self, event):
         self.graphics_scene.keyPressEvent(event)
