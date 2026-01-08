@@ -1,15 +1,18 @@
 # PDF Player 
 PDF Player is a music practice tool that allows you to sync sheet music with an audio recording. PDF Player also doubles as a slow player providing users a useful tool for practicing and learning music. 
 <br>
+
 <figure align="center">
-  <img src="audio_tab.png" width="400">
   <figcaption><b>Audio Timeline Tab.</b><br>Blue markers represent page markers, while red markers represent practice markers.</figcaption>
+  <img src="audio_tab.png" width="400">
 </figure>
 <br>
+
 <figure align="center">
-  <img src="pdf_tab.png" width="400">
   <figcaption><b>PDF Viewer Tab.</b><br> Pages can be navigated using Left/Right Arrow Keys.</figcaption>
+  <img src="pdf_tab.png" width="400">
 </figure>
+<br>
 
 ## How to add markers
 Page markers must be placed on the Audio Timeline in order to synchronize audio with page turns.
