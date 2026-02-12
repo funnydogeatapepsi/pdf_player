@@ -9,7 +9,7 @@ PDF Player is a music practice tool that allows you to sync sheet music with an 
 <br>
 
 <figure align="center">
-  <figcaption><b>PDF Viewer Tab.</b><br> Pages can be navigated using Left/Right Arrow Keys.</figcaption>
+  <figcaption><b>PDF Viewer Tab.</b><br> Pages can be navigated using Up/Down Arrow Keys.</figcaption>
   <img src="pdf_tab.png" width="400">
 </figure>
 <br>
@@ -33,3 +33,4 @@ You can navigate to different markers using the following keys:
 | Left/Back Arrow     | Previous Practice Marker     | 
 | Up Arrow            | Next Page Marker   |
 | Down Arrow          | Previous Page Marker   | 
+

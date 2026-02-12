@@ -13,5 +13,5 @@ self.views()[0].itemAt(self.views()[0].mapFromScene(event.scenePos()))
 
 IDEAS LIST;
 
-Memorizaiton Mode:
+Memorization Mode:
 With a camera added to the system, track face. When the user looks at the screen, there will be a short delay before showing the PDF.

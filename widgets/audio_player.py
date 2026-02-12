@@ -75,10 +75,22 @@ class AudioPlayer(QMediaPlayer):
 
     @current_song.setter
     def current_song(self, song: Song):
+        """
+        Set song and create audio stream
+
+        :param song:
+        :return:
+        """
         self._current_song = song
         self.create_audio_stream(song.raw_audio)
 
     def setPlaybackRate(self, rate, preserve_position=True):
+        """
+
+        :param rate:
+        :param preserve_position:
+        :return:
+        """
         if self._current_song.raw_audio is None:
             log.info("No audio currently imported.")
             return
@@ -96,6 +108,13 @@ class AudioPlayer(QMediaPlayer):
             self.parent().graphics_scene.scrubber_time_ms = int(new_duration * normalized_pos)
 
     def create_audio_stream(self, audio_data, emit_audio_ready_signal=True):
+        """
+        Creates audio stream from audio_data.
+
+        :param audio_data:
+        :param emit_audio_ready_signal:
+        :return:
+        """
         self.stop()
         self.buffer.close()
 
@@ -112,6 +131,12 @@ class AudioPlayer(QMediaPlayer):
             self.audio_ready_signal.emit(True)
 
     def setPosition(self, position):
+        """
+        Set position of the scrubber.
+
+        :param position:
+        :return:
+        """
         position = max(min(position, self.duration()), 0)
         log.info(f"set position: {position}")
         super().setPosition(position)

@@ -4,3 +4,4 @@
 /build/build/
 /build/dist/
 *.pkl
+test_resources/scripts/__pycache__/

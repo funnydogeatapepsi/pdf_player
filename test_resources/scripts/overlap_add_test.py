@@ -64,9 +64,10 @@ def time_stretch_audio_array(input_samples, sample_rate=44100, rate=1.0, dt_anl=
 
 @njit(cache=True)
 def _get_windows(input_samples, n_samples_win, stretch_factor, h_syn, dtype):
+    n_samples, n_channels = input_samples.shape
     h_anl = int(h_syn / stretch_factor)
     n_windows = int(np.ceil((input_samples.shape[0] - 1) / h_anl))
-    win_shape = (n_windows, n_samples_win, input_samples.shape[1])
+    win_shape = (n_windows, n_samples_win, n_channels)
     win_weights = hann(n_samples_win).reshape(-1, 1)
 
     n_windows = win_shape[0]
