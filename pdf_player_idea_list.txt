@@ -1,11 +1,8 @@
 TODO LIST;
-	+ Need to add quick access "Open Recent Project" drop down. JSON?
+	+ Need to fix "Open Recent Project"
 	+ scroll wheel to set page offset (This is used if you use a book as your pdf and you want your start page to be further inside the book)
-	+ Something to improve quality of slowed audio (Phase Vocoder?)
 	+ breakout config
 	+ Spotify support? https://spotipy.readthedocs.io/en/2.25.0/
-    + Skip to marker not working anymore - happens when toolbar actions are hidden...
-    + bug w/ marker numbers
 
 
 self.views()[0].itemAt(self.views()[0].mapFromScene(event.scenePos()))
@@ -14,4 +11,4 @@ self.views()[0].itemAt(self.views()[0].mapFromScene(event.scenePos()))
 IDEAS LIST;
 
 Memorization Mode:
-With a camera added to the system, track face. When the user looks at the screen, there will be a short delay before showing the PDF.
+With a camera added to the system, track gaze. When the user looks at the screen, there will be a short delay before showing the PDF.

@@ -9,7 +9,7 @@ from scipy.io import wavfile
 import librosa
 import numpy as np
 
-from audio_effects.time_stretch import time_stretch_audio_array
+from audio_effects.time_stretch import time_stretch_audio_array, float_to_int16
 
 log = logging.getLogger(__name__)
 
@@ -41,18 +41,30 @@ class Song:
         return self.__has_metadata
 
     def read_data(self):
+        """
+        Read audio file
+
+        :return:
+        """
         raw_audio, sample_rate = librosa.load(self.file_path, sr=None, mono=False)
         self.raw_audio = (raw_audio.T/raw_audio.max() * np.iinfo(np.int16).max).astype(np.int16)
         self.sample_rate = sample_rate
 
     def modify_rate(self, rate=1.0):
+        """
+        Set audio playback rate. Return modified audio.
+
+        :param rate:
+        :return:
+        """
         if self.raw_audio is None:
             return
 
         if abs(rate - 1.0) < 1e-5:
             modified_audio = self.raw_audio
         else:
-            modified_audio = time_stretch_audio_array(self.raw_audio, self.sample_rate, rate)
+            modified_audio = time_stretch_audio_array(self.raw_audio, self.sample_rate, rate) # , ndt=2, method='phase_vocoder'
+            modified_audio = (modified_audio * self.raw_audio.max()).astype(np.int16)
 
         self.metadata.duration = (modified_audio.shape[0] - 1) / self.sample_rate
         return modified_audio
@@ -86,6 +98,7 @@ class AudioPlayer(QMediaPlayer):
 
     def setPlaybackRate(self, rate, preserve_position=True):
         """
+        Set song playback rate
 
         :param rate:
         :param preserve_position:

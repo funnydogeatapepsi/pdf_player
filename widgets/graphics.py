@@ -80,6 +80,11 @@ class GraphicsScene(QGraphicsScene):
         self._audio_player.audio_ready_signal.connect(self.set_audio)
 
     def init_graphics(self):
+        """
+        Initialize the graphics. This will set up the scrub lines, scrubber, and markers
+
+        :return:
+        """
         x0 = self.x_off
         x1 = self.line_length
 
@@ -185,6 +190,12 @@ class GraphicsScene(QGraphicsScene):
 
     @staticmethod
     def _sort_markers(marker_list):
+        """
+        Sort the marker list
+
+        :param marker_list:
+        :return:
+        """
         if len(marker_list) > 1:
             marker_coords = [np.sum(marker.scrubber_coords) for marker in marker_list]
             marker_list = [marker_list[k] for k in np.argsort(marker_coords)]
@@ -269,6 +280,13 @@ class GraphicsScene(QGraphicsScene):
         self._audio_player.setPosition(time_ms)
 
     def _calc_marker_index(self, marker_type=AudioMarker.TYPE.PRACTICE, next_marker=False):
+        """
+        Determine marker index at current timestamp / scrubber location
+
+        :param marker_type:
+        :param next_marker:
+        :return:
+        """
         if marker_type == AudioMarker.TYPE.PRACTICE:
             markers = self.practice_markers
         else:
@@ -387,6 +405,11 @@ class GraphicsScene(QGraphicsScene):
         log.info(f"Audio set w/ metadata {self.audio_metadata=}")
 
     def create_audio_graphics(self):
+        """
+        Create audio waveform image for the scrubber lines.
+
+        :return:
+        """
         if self._audio_player.current_song is None:
             return
 
@@ -439,7 +462,7 @@ class GraphicsScene(QGraphicsScene):
             bin_split = np.array_split(normalized_audio, split_inds)
 
             # Average by taking mean in each bin and construct new signal. Normalize to unit range.
-            pixel_audio = np.nan_to_num(np.array([np.nanmean(x) for x in bin_split]))
+            pixel_audio = np.nan_to_num(np.array([np.nanmean(x) if len(x) > 0 else np.nan for x in bin_split]))
             pixel_audio = pixel_audio / (np.abs(pixel_audio).max() + 1e-15)
             pixel_inds = np.arange(pixel_audio.shape[0])
             pixel_inds = pixel_inds / pixel_inds.max()
@@ -494,6 +517,11 @@ class GraphicsScene(QGraphicsScene):
             self.addItem(item)
 
     def remove_marker(self, marker: AudioMarker):
+        """
+        Remove provided marker from lists
+        :param marker:
+        :return:
+        """
         for item in marker.items(parent_first=False):
             self.removeItem(item)
 
@@ -536,6 +564,11 @@ class GraphicsScene(QGraphicsScene):
         self._load_page_marker_times = page_marker_times
 
     def load_markers(self):
+        """
+        Load marker positions from file
+
+        :return:
+        """
         log.info(f'Load Markers: {self._load_practice_marker_times=}, {self._load_page_marker_times=}, '
                  f'{self.audio_metadata.duration}')
 
@@ -585,6 +618,20 @@ class GraphicsScene(QGraphicsScene):
         self.clear_page_markers()
 
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
+        """
+        We want to interact with the scene.
+
+        Shift + Left Click = insert audio marker
+        Ctrl + Left Click = insert practice marker
+        Ctrl/Shift + Right Click = remove marker
+
+        Left Click on line = Move Scrubber to position
+
+        Letter A + Left Click allows movement of markers
+        
+        :param event:
+        :return:
+        """
         clicked_item = self.itemAt(event.scenePos(), self.parent().transform())
 
         # Determine item type:
@@ -599,26 +646,25 @@ class GraphicsScene(QGraphicsScene):
             clicked_item.mousePressEvent(event)
             return
 
+        shift_left_click = (event.modifiers() == Qt.KeyboardModifier.ShiftModifier and
+                            event.button() == Qt.MouseButton.LeftButton)
+        ctrl_left_click = (event.modifiers() == Qt.KeyboardModifier.ControlModifier and
+                           event.button() == Qt.MouseButton.LeftButton)
+
         # If not marker, scrubber, or line, add a marker at the scrubber if left-click + shift/ctrl
         if not (is_marker or is_audio_line):
             time_ms = self._audio_player.position()
             line_index, scrubber_index = self.time_to_scrubber(time_ms)
-            if (event.modifiers() == Qt.KeyboardModifier.ShiftModifier and
-                    event.button() == Qt.MouseButton.LeftButton):
+            if shift_left_click:
                 # insert audio marker at line index and scrubber index
                 self.insert_marker(line_index, scrubber_index, marker_type=AudioMarker.TYPE.PRACTICE)
-            elif (event.modifiers() == Qt.KeyboardModifier.ControlModifier and
-                  event.button() == Qt.MouseButton.LeftButton):
+            elif ctrl_left_click:
                 self.insert_marker(line_index, scrubber_index, marker_type=AudioMarker.TYPE.PAGE)
             return
 
         # If line and shift+click, add Practice Marker
         # If line and ctrl+click, add Page Marker
         # If marker and shift+click OR ctrl+click, delete marker
-        shift_left_click = (event.modifiers() == Qt.KeyboardModifier.ShiftModifier and
-                            event.button() == Qt.MouseButton.LeftButton)
-        ctrl_left_click = (event.modifiers() == Qt.KeyboardModifier.ControlModifier and
-                           event.button() == Qt.MouseButton.LeftButton)
         right_click = ((event.modifiers() == Qt.KeyboardModifier.ControlModifier or
                        event.modifiers() == Qt.KeyboardModifier.ShiftModifier) and
                        event.button() == Qt.MouseButton.RightButton)
