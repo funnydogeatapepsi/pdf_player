@@ -13,6 +13,14 @@ from audio_effects.time_stretch import time_stretch_audio_array, float_to_int16
 
 log = logging.getLogger(__name__)
 
+# Time stretch algorithms the user can pick from: key -> label shown in the UI.
+STRETCH_METHODS = {
+    "wsola": "WSOLA (overlap-add with waveform alignment, recommended)",
+    "overlap_add": "Overlap-Add (fastest, some amplitude wobble)",
+    "phase_vocoder": "Phase Vocoder (frequency domain)",
+}
+DEFAULT_STRETCH_METHOD = "wsola"
+
 
 class Song:
     file_path = None
@@ -61,11 +69,12 @@ class Song:
         self.raw_audio = (raw_audio * np.iinfo(np.int16).max).astype(np.int16)
         self.sample_rate = sample_rate
 
-    def modify_rate(self, rate=1.0):
+    def modify_rate(self, rate=1.0, method="wsola"):
         """
         Set audio playback rate. Return modified audio.
 
-        :param rate:
+        :param rate:    playback rate (1.0 = original speed)
+        :param method:  time stretch algorithm, see STRETCH_METHODS
         :return:
         """
         if self.raw_audio is None:
@@ -74,8 +83,9 @@ class Song:
         if abs(rate - 1.0) < 1e-5:
             modified_audio = self.raw_audio
         else:
-            modified_audio = time_stretch_audio_array(self.raw_audio, self.sample_rate, rate) # , ndt=2, method='phase_vocoder'
-            modified_audio = (modified_audio * self.raw_audio.max()).astype(np.int16)
+            # Output comes back at the same scale/loudness as the input (RMS matched + soft limited), see time_stretch.
+            modified_audio = time_stretch_audio_array(self.raw_audio, self.sample_rate, rate, method=method)
+            modified_audio = np.clip(modified_audio, np.iinfo(np.int16).min, np.iinfo(np.int16).max).astype(np.int16)
 
         self.metadata.duration = (modified_audio.shape[0] - 1) / self.sample_rate
         return modified_audio
@@ -92,10 +102,14 @@ class AudioPlayer(QMediaPlayer):
         self._current_song = Song()
         self.buffer = QBuffer()
         self._volume = 1.0
-        self._pending_position = None   # A seek requested before the new stream was loaded.
+        self._playback_rate = 1.0
+        self._stretch_method = DEFAULT_STRETCH_METHOD
+        self._pending_position = None   # Seek target not yet confirmed by the backend (see setPosition).
+        self._pending_attempts = 0
         self._stream_ready = False      # False from setSourceDevice() until the backend reports the media loaded.
         self.mediaStatusChanged.connect(self._on_media_status_changed)
-        self.durationChanged.connect(lambda duration: self._apply_pending_position())
+        self.durationChanged.connect(lambda duration: self._apply_pending_position("durationChanged"))
+        self.positionChanged.connect(lambda position: self._apply_pending_position("positionChanged"))
 
     @property
     def current_song(self):
@@ -110,6 +124,7 @@ class AudioPlayer(QMediaPlayer):
         :return:
         """
         self._current_song = song
+        self._playback_rate = 1.0
         self.create_audio_stream(song.raw_audio)
 
     def setVolume(self, volume: float):
@@ -122,6 +137,27 @@ class AudioPlayer(QMediaPlayer):
     def volume(self) -> float:
         return self._volume
 
+    @property
+    def stretch_method(self) -> str:
+        return self._stretch_method
+
+    def setStretchMethod(self, method: str):
+        """
+        Choose the time stretch algorithm (see STRETCH_METHODS). If a rate other than 1.0 is active, the current
+        song is re-stretched with the new method.
+        """
+        if method not in STRETCH_METHODS:
+            raise ValueError(f"Unknown stretch method {method!r}; expected one of {list(STRETCH_METHODS)}")
+        if method == self._stretch_method:
+            return
+        self._stretch_method = method
+        log.info(f"stretch method: {method}")
+        if abs(self._playback_rate - 1.0) > 1e-5 and self._current_song.raw_audio is not None:
+            self.setPlaybackRate(self._playback_rate)
+
+    def playbackRate(self) -> float:
+        return self._playback_rate
+
     def setPlaybackRate(self, rate, preserve_position=True):
         """
         Set song playback rate
@@ -133,7 +169,8 @@ class AudioPlayer(QMediaPlayer):
         if self._current_song.raw_audio is None:
             log.info("No audio currently imported.")
             return
-        log.info(f"set playback {rate=}")
+        log.info(f"set playback {rate=} ({self._stretch_method})")
+        self._playback_rate = rate
         was_playing = self.isPlaying()
         self.pause()
         time_ms = self.position()
@@ -141,7 +178,7 @@ class AudioPlayer(QMediaPlayer):
         current_audio_duration = self._current_song.metadata.duration * 1000
         normalized_pos = time_ms / current_audio_duration if current_audio_duration > 0 else 0
 
-        new_audio = self._current_song.modify_rate(rate=rate)
+        new_audio = self._current_song.modify_rate(rate=rate, method=self._stretch_method)
         self.create_audio_stream(new_audio, emit_audio_ready_signal=False)
         new_duration = self._current_song.metadata.duration * 1000
 
@@ -178,38 +215,57 @@ class AudioPlayer(QMediaPlayer):
 
     _READY_STATUSES = (QMediaPlayer.MediaStatus.LoadedMedia, QMediaPlayer.MediaStatus.BufferingMedia,
                        QMediaPlayer.MediaStatus.BufferedMedia, QMediaPlayer.MediaStatus.EndOfMedia)
+    SEEK_TOLERANCE_MS = 150     # A confirmed position within this of the target counts as "landed".
+    MAX_SEEK_ATTEMPTS = 25
 
     def _on_media_status_changed(self, status):
-        log.debug(f"media status: {status}")
+        log.info(f"media status: {status}, duration={self.duration()}, position={self.position()}")
         if status in self._READY_STATUSES:
             self._stream_ready = True
-            self._apply_pending_position()
+            self._apply_pending_position("mediaStatusChanged")
         elif status in (QMediaPlayer.MediaStatus.NoMedia, QMediaPlayer.MediaStatus.InvalidMedia):
             self._stream_ready = False
 
-    def _apply_pending_position(self):
-        """Apply a seek that was requested while the stream was still loading (see setPosition)."""
-        if self._pending_position is None or not self._stream_ready or self.duration() <= 0:
+    def _apply_pending_position(self, trigger=""):
+        """
+        (Re-)issue a pending seek until the backend confirms the position, then clear it.
+
+        The media backend silently drops seeks issued while a freshly created stream is still loading/starting,
+        and may rewind to 0 when playback is first primed, so a single setPosition() call is not enough.
+        """
+        if self._pending_position is None:
             return
-        position, self._pending_position = self._pending_position, None
-        self.setPosition(position)
+        if not self._stream_ready or self.duration() <= 0:
+            return
+
+        target = min(self._pending_position, self.duration())
+        # Landed if we are at the target, or slightly past it (playback may have advanced since the seek).
+        if -self.SEEK_TOLERANCE_MS <= self.position() - target <= 1000:
+            log.info(f"seek to {target} confirmed ({trigger})")
+            self._pending_position = None
+            return
+
+        if self._pending_attempts >= self.MAX_SEEK_ATTEMPTS:
+            log.warning(f"giving up seeking to {target}; player reports {self.position()}")
+            self._pending_position = None
+            return
+
+        self._pending_attempts += 1
+        log.info(f"seek attempt {self._pending_attempts} to {target} ({trigger}); player at {self.position()}")
+        super().setPosition(target)
 
     def setPosition(self, position):
         """
         Set position of the scrubber.
 
-        Seeks issued while a freshly created stream is still loading are silently dropped by the media backend,
-        so those are queued and applied once the backend reports the media as loaded.
+        The seek is remembered as pending until the backend reports a position at the target
+        (see _apply_pending_position), which covers seeks issued right after a new stream was created.
 
         :param position:
         :return:
         """
         position = max(int(position), 0)
-        if not self._stream_ready or self.duration() <= 0:
-            log.info(f"stream not ready; deferring set position: {position}")
-            self._pending_position = position
-            return
-        position = min(position, self.duration())
-        log.info(f"set position: {position}")
-        super().setPosition(position)
-
+        log.info(f"set position: {position} (ready={self._stream_ready}, duration={self.duration()})")
+        self._pending_position = position
+        self._pending_attempts = 0
+        self._apply_pending_position("setPosition")

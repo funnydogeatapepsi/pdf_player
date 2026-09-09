@@ -20,13 +20,13 @@ NUMBA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 os.environ["NUMBA_CACHE_DIR"] = str(NUMBA_CACHE_DIR)
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QSlider, QFileDialog, QMessageBox, QLabel, QMenu,
-                               QDialog, QDialogButtonBox, QFormLayout, QSpinBox)
+                               QDialog, QDialogButtonBox, QFormLayout, QSpinBox, QComboBox)
 from PySide6.QtMultimedia import QMediaPlayer
-from PySide6.QtCore import QUrl, Qt, QPointF, Signal
+from PySide6.QtCore import QUrl, Qt, QPointF, Signal, QSettings
 from PySide6.QtGui import QIcon, QAction, QCloseEvent
 
 from windows.mainwindow import Ui_MainWindow
-from widgets.audio_player import AudioPlayer, Song
+from widgets.audio_player import AudioPlayer, Song, STRETCH_METHODS, DEFAULT_STRETCH_METHOD
 from widgets.graphics import GraphicsView, AudioMarker
 from widgets.pdf import PdfView
 
@@ -41,6 +41,10 @@ log.addHandler(stream_handler)
 
 RECENT_PROJECTS_JSON = DATA_DIR / 'recents.json'
 MAX_RECENT_PROJECTS = 15
+
+# Application-wide (not per project) settings, stored in DATA_DIR/settings.ini
+SETTINGS_INI = DATA_DIR / 'settings.ini'
+SETTING_STRETCH_METHOD = "playback/stretch_method"
 
 
 class Project:
@@ -108,9 +112,9 @@ class GenericSlider(QSlider):
 
 class ProjectOptionsDialog(QDialog):
     """
-    Project settings. Currently: PDF page offset.
+    Project settings (PDF page offset) and playback settings (time stretch method).
     """
-    def __init__(self, parent, page_offset: int, n_pages: int):
+    def __init__(self, parent, page_offset: int, n_pages: int, stretch_method: str):
         super().__init__(parent)
         self.setWindowTitle("Project Options")
 
@@ -121,8 +125,17 @@ class ProjectOptionsDialog(QDialog):
                                             "The first page shown is this page; page marker 1 turns to the next one.\n"
                                             "Tip: Ctrl + scroll wheel over the PDF adjusts this as well.")
 
+        self.stretch_method_combo = QComboBox(self)
+        for key, label in STRETCH_METHODS.items():
+            self.stretch_method_combo.addItem(label, userData=key)
+        self.stretch_method_combo.setCurrentIndex(max(0, self.stretch_method_combo.findData(stretch_method)))
+        self.stretch_method_combo.setToolTip("Algorithm used to slow down / speed up the audio.\n"
+                                             "Applies to all projects; changing it re-processes the current song "
+                                             "if a playback speed other than 100% is active.")
+
         layout = QFormLayout(self)
         layout.addRow(f"PDF page offset (0 - {max(0, n_pages - 1)}):", self.page_offset_spinbox)
+        layout.addRow("Slow-down method:", self.stretch_method_combo)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
         buttons.accepted.connect(self.accept)
@@ -132,6 +145,10 @@ class ProjectOptionsDialog(QDialog):
     @property
     def page_offset(self) -> int:
         return self.page_offset_spinbox.value()
+
+    @property
+    def stretch_method(self) -> str:
+        return self.stretch_method_combo.currentData()
 
 
 class MainWindow(QMainWindow):
@@ -150,8 +167,15 @@ class MainWindow(QMainWindow):
         self.m_ui.setupUi(self)
         self.WINDOW_TITLE = self.windowTitle()
 
+        # Application settings:
+        self.settings = QSettings(str(SETTINGS_INI), QSettings.Format.IniFormat, self)
+
         # Create Audio Player:
         self.audio_player = AudioPlayer(parent=self)
+        stretch_method = str(self.settings.value(SETTING_STRETCH_METHOD, DEFAULT_STRETCH_METHOD))
+        if stretch_method not in STRETCH_METHODS:
+            stretch_method = DEFAULT_STRETCH_METHOD
+        self.audio_player.setStretchMethod(stretch_method)
 
         # Create Graphics:
         self.graphics_view = GraphicsView(parent=self.m_ui.audio_tab, layout=self.m_ui.horizontalLayout,
@@ -346,9 +370,14 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ project options
     def _options(self):
         dialog = ProjectOptionsDialog(self, page_offset=self.graphics_scene.page_offset,
-                                      n_pages=self.graphics_scene.n_pages)
+                                      n_pages=self.graphics_scene.n_pages,
+                                      stretch_method=self.audio_player.stretch_method)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._set_page_offset(dialog.page_offset)
+            if dialog.stretch_method != self.audio_player.stretch_method:
+                self.settings.setValue(SETTING_STRETCH_METHOD, dialog.stretch_method)
+                self.settings.sync()
+                self.audio_player.setStretchMethod(dialog.stretch_method)
 
     def _set_page_offset(self, page_offset: int):
         old_offset = self.graphics_scene.page_offset
