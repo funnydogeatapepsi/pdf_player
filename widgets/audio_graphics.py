@@ -195,6 +195,6 @@ class GraphicsType(Enum):
     def get_item_type(cls, item):
         item_type = None
         item_ind = cls._get_item_ind(item)
-        if item_ind:
+        if item_ind is not None:    # index 0 (SCRUBBER) is a valid match
             item_type = cls.get_all_types()[item_ind]
         return item_type

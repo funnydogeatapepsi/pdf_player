@@ -14,6 +14,20 @@ PDF Player is a music practice tool that allows you to sync sheet music with an 
 </figure>
 <br>
 
+## Download
+Windows builds are attached to each [GitHub Release](https://github.com/funnydogeatapepsi/pdf_player/releases)
+(built automatically by GitHub Actions from `build/pdf_player.spec`). To run from source:
+
+```
+pip install -r requirements.txt
+python main.py
+```
+
+## Page offset
+If your PDF has leading pages (cover, table of contents, ...), set the **page offset** in *Options → Project Options*
+or hold **Ctrl** and scroll the mouse wheel over the PDF tab. The offset is the page shown before the first page
+marker; page marker *k* then turns to page `offset + k`. The offset is saved with the project.
+
 ## How to add markers
 Page markers must be placed on the Audio Timeline in order to synchronize audio with page turns.
 Clicking on the Audio Timeline with one of the corresponding combinations will add/remove a marker:

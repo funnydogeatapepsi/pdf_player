@@ -1,0 +1,9 @@
+# Runtime dependencies actually imported by pdf_player (see environment.yaml for the full conda env).
+PySide6==6.7.0
+numpy==1.26.4
+scipy==1.13.0
+librosa==0.10.2.post1
+numba==0.59.1
+tinytag==1.10.1
+soundfile==0.12.1
+rocket-fft==0.2.5

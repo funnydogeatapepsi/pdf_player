@@ -61,6 +61,8 @@ class GraphicsScene(QGraphicsScene):
     _active_page_marker_index = 0
     _n_page_markers = 0
     _n_pages = 0
+    _page_offset = 0        # Number of leading PDF pages to skip (e.g. cover / table of contents)
+    _loading_markers = False
 
     TIME_TOL_LOW_MS = 30
     TIME_TOL_HIGH_MS = 500
@@ -69,7 +71,8 @@ class GraphicsScene(QGraphicsScene):
 
     _audio_graphics = None
 
-    page_changed_signal = Signal(int)
+    page_changed_signal = Signal(int)       # Emits the PDF page index (page offset already applied)
+    markers_changed_signal = Signal()       # Emitted whenever the user adds/removes/moves markers
 
     def __init__(self, parent, audio_player: AudioPlayer):
         super().__init__(0, 0, self.max_x, self.max_y, parent)
@@ -78,6 +81,10 @@ class GraphicsScene(QGraphicsScene):
         self._audio_player = audio_player
         self._audio_player.positionChanged.connect(self.set_scrubber_time)
         self._audio_player.audio_ready_signal.connect(self.set_audio)
+
+    def _emit_markers_changed(self):
+        if not self._loading_markers:
+            self.markers_changed_signal.emit()
 
     def init_graphics(self):
         """
@@ -160,10 +167,46 @@ class GraphicsScene(QGraphicsScene):
 
     def set_n_pages(self, val):
         self._n_pages = val
+        self.page_offset = self._page_offset    # re-clamp offset to the new page count
+
+    @property
+    def page_offset(self):
+        return self._page_offset
+
+    @page_offset.setter
+    def page_offset(self, offset):
+        """
+        Set the number of leading PDF pages to skip. Page marker k (1-based) maps to PDF page index k + offset,
+        and the page shown before the first marker is index `offset`.
+        """
+        offset = int(max(0, offset))
+        if self.n_pages > 0:
+            offset = min(offset, self.n_pages - 1)
+        if offset != self._page_offset:
+            self._page_offset = offset
+            log.info(f"Page offset set to {offset}")
+        # Always re-emit so the pdf view follows the (possibly re-clamped) offset:
+        self.page_changed_signal.emit(self.marker_index_to_page(self._active_page_marker_index))
+
+    @property
+    def n_usable_pages(self):
+        """Number of PDF pages available for page markers once the offset is applied."""
+        return max(0, self.n_pages - self._page_offset)
+
+    def marker_index_to_page(self, marker_index):
+        """Convert an active page-marker index (0 = before the first marker) to a PDF page index."""
+        page = marker_index + self._page_offset
+        if self.n_pages > 0:
+            page = min(page, self.n_pages - 1)
+        return max(0, page)
 
     @property
     def markers_exist(self):
-        return (self.n_practice_markers > 0) or (self.n_pages > 0)
+        return (self.n_practice_markers > 0) or (self.n_page_markers > 0)
+
+    @property
+    def n_page_markers(self):
+        return self._n_page_markers
 
     @property
     def active_page_marker_index(self):
@@ -176,11 +219,11 @@ class GraphicsScene(QGraphicsScene):
         :param page_index:
         :return:
         """
-        page_index = min(self.n_pages, page_index)
+        page_index = max(0, min(self._n_page_markers, page_index))
         if page_index != self._active_page_marker_index:
             log.info(f"Active page changed to {page_index}")
-            self.page_changed_signal.emit(page_index)
             self._active_page_marker_index = page_index
+            self.page_changed_signal.emit(self.marker_index_to_page(page_index))
 
     def update_active_marker_indexes(self):
         self.active_practice_marker_index = min(
@@ -454,7 +497,7 @@ class GraphicsScene(QGraphicsScene):
 
             # Calculate the scrubber inds along the line and normalize the audio to unit range
             scrubber_inds = scrubber_index[inds_line]
-            normalized_audio = raw_audio[inds_line] / raw_audio.max()
+            normalized_audio = raw_audio[inds_line] / (np.abs(raw_audio).max() + 1e-15)   # safe for silent audio
 
             # Make bins:
             scrubber_inds_image = (scrubber_inds * image_width * resolution).astype(int)
@@ -465,12 +508,12 @@ class GraphicsScene(QGraphicsScene):
             pixel_audio = np.nan_to_num(np.array([np.nanmean(x) if len(x) > 0 else np.nan for x in bin_split]))
             pixel_audio = pixel_audio / (np.abs(pixel_audio).max() + 1e-15)
             pixel_inds = np.arange(pixel_audio.shape[0])
-            pixel_inds = pixel_inds / pixel_inds.max()
+            pixel_inds = pixel_inds / max(pixel_inds.max(), 1)
 
             # Lets pack this into an image. First convert to image coordinates:
             pos_y = (pixel_audio + 1) / 2 * image_height
             pos_x = image_width * pixel_inds
-            pos = np.column_stack([pos_x, pos_y])
+            pos = np.nan_to_num(np.column_stack([pos_x, pos_y]))
 
             # Make pixmap and paint the audio image onto the pixmap using QPainter:
             qpixmap = QPixmap(image_width, image_height)
@@ -503,18 +546,22 @@ class GraphicsScene(QGraphicsScene):
             self._practice_markers.append(marker)
             self.practice_markers = self._practice_markers
         else:
-            if self._n_page_markers < self.n_pages:
+            # One page marker per page turn; the first `page_offset` pages and the first shown page need no marker.
+            max_page_markers = max(0, self.n_usable_pages - 1)
+            if self._n_page_markers < max_page_markers:
                 self._page_markers.append(marker)
                 self.page_markers = self._page_markers
             else:
                 QMessageBox.information(self.parent(), "Insert Page Marker Failed",
                                         f"Failed to insert page marker because there are already "
-                                        f"{self._n_page_markers} of {self.n_pages} possible.")
+                                        f"{self._n_page_markers} of {max_page_markers} possible "
+                                        f"({self.n_pages} pages, page offset {self._page_offset}).")
                 return
 
+        self.addItem(marker)    # adding the group adds its children as well
         for item in marker.items(parent_first=True):
             item.setZValue(1)
-            self.addItem(item)
+        self._emit_markers_changed()
 
     def remove_marker(self, marker: AudioMarker):
         """
@@ -522,27 +569,25 @@ class GraphicsScene(QGraphicsScene):
         :param marker:
         :return:
         """
-        for item in marker.items(parent_first=False):
-            self.removeItem(item)
-
         marker_ind = self._get_marker_index(marker)
+        if marker_ind is None:
+            # e.g. START_MARKER / END_MARKER sentinels, which are not real markers.
+            log.debug("Marker not in scene; nothing to remove.")
+            return
+
+        self.removeItem(marker)  # removing the group removes its children as well
 
         if marker.marker_type == AudioMarker.TYPE.PRACTICE:
-            if self._n_practice_markers == 0:
-                return
-
             log.debug(f"Removing practice marker {marker_ind=}")
             self._practice_markers.pop(marker_ind)
             self._n_practice_markers = len(self._practice_markers)
         else:
-            if self._n_page_markers == 0:
-                return
-
             log.debug(f"Removing page marker {marker_ind=}")
             self._page_markers.pop(marker_ind)
             self._n_page_markers = len(self._page_markers)
 
         self.reset_marker_numbers()
+        self._emit_markers_changed()
 
     def reset_marker_numbers(self):
         for k_marker, marker in enumerate(self.page_markers):
@@ -572,6 +617,13 @@ class GraphicsScene(QGraphicsScene):
         log.info(f'Load Markers: {self._load_practice_marker_times=}, {self._load_page_marker_times=}, '
                  f'{self.audio_metadata.duration}')
 
+        self._loading_markers = True
+        try:
+            self._load_markers()
+        finally:
+            self._loading_markers = False
+
+    def _load_markers(self):
         if len(self._load_practice_marker_times) > 0:
             practice_marker_scrub_coords = [self.time_to_scrubber(marker_time*self.song_duration)
                                             for marker_time in self._load_practice_marker_times]
@@ -614,8 +666,15 @@ class GraphicsScene(QGraphicsScene):
 
     def clear_markers(self):
         self.scrubber_time_ms = None
+        had_markers = self.markers_exist
         self.clear_practice_markers()
         self.clear_page_markers()
+        self._load_practice_marker_times = []
+        self._load_page_marker_times = []
+        self._active_page_marker_index = 0
+        self._active_practice_marker_index = 0
+        if had_markers:
+            self._emit_markers_changed()
 
     def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
         """
@@ -652,7 +711,7 @@ class GraphicsScene(QGraphicsScene):
                            event.button() == Qt.MouseButton.LeftButton)
 
         # If not marker, scrubber, or line, add a marker at the scrubber if left-click + shift/ctrl
-        if not (is_marker or is_audio_line):
+        if not (is_marker or is_audio_line or is_scrubber):
             time_ms = self._audio_player.position()
             line_index, scrubber_index = self.time_to_scrubber(time_ms)
             if shift_left_click:
@@ -705,6 +764,12 @@ class GraphicsScene(QGraphicsScene):
 
         if self._unlock_markers and item_type == GraphicsType.MARKER.name:
             clicked_item.scrubber_coords = self.pos_to_scrubber(event.scenePos())
+            # A moved marker may have changed order; re-sort (and renumber page markers).
+            if clicked_item.marker_type == AudioMarker.TYPE.PRACTICE:
+                self.practice_markers = self._practice_markers
+            else:
+                self.page_markers = self._page_markers
+            self._emit_markers_changed()
             return
 
         left_click = (event.button() == Qt.MouseButton.LeftButton and event.modifiers() == Qt.KeyboardModifier.NoModifier)

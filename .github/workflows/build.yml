@@ -1,0 +1,49 @@
+name: Build Windows executable
+
+on:
+  push:
+    tags:
+      - "v*"            # e.g. `git tag v0.1.0 && git push origin v0.1.0` creates a GitHub Release
+  workflow_dispatch:    # ...or run manually from the Actions tab to get a downloadable artifact
+
+permissions:
+  contents: write       # needed to attach the exe to a Release
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Build with PyInstaller
+        run: pyinstaller --clean --noconfirm build/pdf_player.spec
+
+      - name: Check the executable was produced
+        shell: pwsh
+        run: |
+          if (-not (Test-Path dist/pdf_player.exe)) { throw "dist/pdf_player.exe was not produced" }
+          Get-Item dist/pdf_player.exe | Format-List Name, Length
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pdf_player-windows-${{ github.ref_name }}
+          path: dist/pdf_player.exe
+          if-no-files-found: error
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist/pdf_player.exe
+          generate_release_notes: true
