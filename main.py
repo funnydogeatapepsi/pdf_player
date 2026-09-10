@@ -49,8 +49,13 @@ SETTING_STRETCH_METHOD = "playback/stretch_method"
 
 class Project:
     """
-    This class supports the save/load functionality -- it is saved using pickle and can be opened later for importing
+    A saved project: audio + pdf paths, marker positions (normalised to [0, 1] of the song), page offset.
+
+    Saved as JSON (*.json) since v0.2; older *.pkl (pickle) files are still readable.
     """
+    FORMAT_VERSION = 1
+    JSON_SUFFIX = ".json"
+
     def __init__(self, song_path, page_marker_times, practice_marker_times, pdf_path, page_offset=0):
         self.song_path = song_path
         self.page_marker_times = page_marker_times
@@ -58,6 +63,46 @@ class Project:
         self.pdf_path = pdf_path
         # Number of leading PDF pages (cover, table of contents, ...) before the page that marker 1 turns *from*.
         self.page_offset = page_offset
+
+    def to_dict(self) -> dict:
+        return {
+            "format_version": self.FORMAT_VERSION,
+            "song_path": None if self.song_path is None else str(self.song_path),
+            "pdf_path": None if self.pdf_path is None else str(self.pdf_path),
+            "page_offset": int(self.page_offset),
+            "page_marker_times": [float(t) for t in (self.page_marker_times or [])],
+            "practice_marker_times": [float(t) for t in (self.practice_marker_times or [])],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Project":
+        version = data.get("format_version", 0)
+        if version > cls.FORMAT_VERSION:
+            log.warning(f"Project file is version {version}, newer than this app ({cls.FORMAT_VERSION}); "
+                        f"unknown fields will be ignored.")
+        return cls(song_path=data.get("song_path"),
+                   page_marker_times=data.get("page_marker_times", []),
+                   practice_marker_times=data.get("practice_marker_times", []),
+                   pdf_path=data.get("pdf_path"),
+                   page_offset=data.get("page_offset", 0))
+
+    def save(self, path: Path):
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(self.to_dict(), f, indent=4)
+
+    @classmethod
+    def load(cls, path: Path) -> "Project":
+        path = Path(path)
+        if path.suffix.lower() == ".pkl":
+            with open(path, "rb") as f:
+                legacy = pickle.load(f)
+            return cls(song_path=legacy.song_path,
+                       page_marker_times=legacy.page_marker_times,
+                       practice_marker_times=legacy.practice_marker_times,
+                       pdf_path=legacy.pdf_path,
+                       page_offset=getattr(legacy, "page_offset", 0))    # older pickles predate the offset
+        with open(path, "r", encoding="utf-8") as f:
+            return cls.from_dict(json.load(f))
 
 
 class GenericSlider(QSlider):
@@ -321,8 +366,18 @@ class MainWindow(QMainWindow):
         def _clear_previous_page_marker():
             self.graphics_scene.clear_previous_marker(marker_type=AudioMarker.TYPE.PAGE)
 
+        def _stretch_busy(busy):
+            if busy:
+                self.statusBar().showMessage(f"Processing audio at {self.playbackspeed_bar.value()}% ...")
+            else:
+                self.statusBar().clearMessage()
+
         self.m_ui.actionPlay.triggered.connect(toggle_audio)
         self.audio_player.playbackStateChanged.connect(set_icon)
+        self.audio_player.stretch_busy_signal.connect(_stretch_busy)
+        self.audio_player.stretch_failed_signal.connect(
+            lambda msg: self._critical("Time stretch failed", msg, accept=QMessageBox.StandardButton.Ok,
+                                       cancel=QMessageBox.StandardButton.NoButton))
         self.m_ui.actionNext_Practice_Marker.triggered.connect(self.graphics_scene.next_practice_marker)
         self.m_ui.actionPrevious_Practice_Marker.triggered.connect(self.graphics_scene.previous_practice_marker)
         self.m_ui.actionNext_Page.triggered.connect(self.graphics_scene.next_page)
@@ -434,12 +489,16 @@ class MainWindow(QMainWindow):
 
         save_path = self._save_path
         if save_as or (save_path is None):
-            filesave = self.file_dialog.getSaveFileUrl(self, caption="Save Project", filter="pkl (*.pkl)")[0]
+            filesave = self.file_dialog.getSaveFileUrl(self, caption="Save Project",
+                                                       filter="Project (*.json)")[0]
             save_path = self._url_to_path(filesave)
 
         if save_path is None:
             log.info("No output path specified.")
             return False
+        if save_path.suffix.lower() != Project.JSON_SUFFIX:
+            # Projects are saved as JSON now; a project opened from an old .pkl is saved next to it as .json.
+            save_path = save_path.with_suffix(Project.JSON_SUFFIX)
 
         pdf_path = self._pdf_path
         song_path = self.audio_player.current_song.file_path
@@ -452,8 +511,7 @@ class MainWindow(QMainWindow):
                           practice_marker_times=practice_marker_times,
                           pdf_path=pdf_path,
                           page_offset=self.graphics_scene.page_offset)
-        with open(save_path, 'wb') as f:
-            pickle.dump(project, f)
+        project.save(save_path)
 
         self._save_path = save_path
         if self._open_path != save_path:
@@ -465,7 +523,8 @@ class MainWindow(QMainWindow):
 
     def _load_markers(self, load_path: Path | None = None):
         if load_path is None:
-            fileload = self.file_dialog.getOpenFileUrl(self, caption="Open Project", filter="pkl (*.pkl)")[0]
+            fileload = self.file_dialog.getOpenFileUrl(self, caption="Open Project",
+                                                       filter="Project (*.json *.pkl)")[0]
             load_path = self._url_to_path(fileload)
 
         if load_path is None:
@@ -485,8 +544,7 @@ class MainWindow(QMainWindow):
 
         log.info(f"Opening Project {load_path}.")
         try:
-            with open(load_path, "rb") as f:
-                project = pickle.load(f)
+            project = Project.load(load_path)
         except Exception as err:
             log.exception(f"Failed to open project {load_path}")
             self._critical("Failed to open project.", f"Could not read {load_path}:\n{err}",
@@ -540,6 +598,12 @@ class MainWindow(QMainWindow):
         self.graphics_scene.keyPressEvent(event)
         if not event.isAccepted():
             super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event):
+        # Mirror keyPressEvent: the scene must see the release of [A] or markers stay unlocked.
+        self.graphics_scene.keyReleaseEvent(event)
+        if not event.isAccepted():
+            super().keyReleaseEvent(event)
 
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)

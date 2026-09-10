@@ -1,7 +1,4 @@
 TODO LIST;
-	+ Need to fix "Open Recent Project"
-	+ scroll wheel to set page offset (This is used if you use a book as your pdf and you want your start page to be further inside the book)
-	+ breakout config
 	+ Spotify support? https://spotipy.readthedocs.io/en/2.25.0/
 
 

@@ -8,7 +8,7 @@ from numba import njit, prange
 log = logging.getLogger(__name__)
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def hann(M, sym=True):
     if int(M) != M or M < 0:
         raise ValueError('Window length M must be a non-negative integer')
@@ -30,7 +30,7 @@ def hann(M, sym=True):
         return w[:-1]
 
 
-@njit(cache=True, parallel=True)
+@njit(cache=True, parallel=True, nogil=True)
 def _legacy_time_stretch_audio_array(input_samples, sample_rate=44100, rate=1.0, dt_anl=0.1, h_scale=2):
     """ Overlay Offset Add algorithm from review paper """
     n_samples, n_channels = input_samples.shape
@@ -93,7 +93,7 @@ def _legacy_time_stretch_audio_array(input_samples, sample_rate=44100, rate=1.0,
     return output_audio_array
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def generate_window(input_samples, k_window, window_weights, h_anl):
     n_samples, n_channels = input_samples.shape
     n_samples_win = window_weights.shape[0]
@@ -122,7 +122,7 @@ def generate_window(input_samples, k_window, window_weights, h_anl):
     return x_win
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _overlap_add(input_samples, sample_rate=44100, rate=1.0, dt_anl=0.1, h_scale=2):
     n_samples, n_channels = input_samples.shape
     stretch_factor = 1 / rate
@@ -161,7 +161,7 @@ def _overlap_add(input_samples, sample_rate=44100, rate=1.0, dt_anl=0.1, h_scale
     return output_audio_array
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _dot(a_arr, a, b_arr, b, length):
     acc = 0.0
     for i in range(length):
@@ -169,7 +169,7 @@ def _dot(a_arr, a, b_arr, b, length):
     return acc
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _prefix_energy(x):
     """csum[j] = sum(x[i]^2 for i < j), so the energy of x[a:b] is csum[b] - csum[a]."""
     csum = np.zeros(x.shape[0] + 1, dtype="float")
@@ -178,7 +178,7 @@ def _prefix_energy(x):
     return csum
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _wsola(input_samples, rate=1.0, n_win=2048, search=512, decim=8):
     """
     Waveform Similarity Overlap-Add (Verhelst & Roelands, 1993).
@@ -279,13 +279,13 @@ def _wsola(input_samples, rate=1.0, n_win=2048, search=512, decim=8):
     return output
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _wrap_to_pi(x):
     # wrap to [-pi, pi]
     return (x + np.pi) % (2.0 * np.pi) - np.pi
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def peak_normalize(y, headroom_db=0.05):
     # headroom_db=1 gives ~0.89 max
     peak = np.max(np.abs(y))
@@ -297,7 +297,7 @@ def peak_normalize(y, headroom_db=0.05):
     return y_norm
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _phase_vocoder_channel(x, sample_rate=44100, rate=1.0, dt_anl=0.1, h_scale=2, phase_lock=True):
     """
     Phase vocoder for a single channel x (1-D). Returns the stretched channel (1-D float).
@@ -414,7 +414,7 @@ def _phase_vocoder_channel(x, sample_rate=44100, rate=1.0, dt_anl=0.1, h_scale=2
     return output
 
 
-@njit(cache=True, parallel=True)
+@njit(cache=True, parallel=True, nogil=True)
 def _phase_vocoder(input_samples, sample_rate=44100, rate=1.0, dt_anl=0.1, h_scale=2, phase_lock=True):
     """Phase vocoder over all channels; channels are independent and processed in parallel."""
     n_samples, n_channels = input_samples.shape
@@ -426,7 +426,7 @@ def _phase_vocoder(input_samples, sample_rate=44100, rate=1.0, dt_anl=0.1, h_sca
     return output_audio_array
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def _rms(x):
     acc = 0.0
     for i in range(x.shape[0]):
@@ -435,7 +435,7 @@ def _rms(x):
     return np.sqrt(acc / max(x.shape[0] * x.shape[1], 1))
 
 
-@njit(cache=True)
+@njit(cache=True, nogil=True)
 def match_level(y, x, limit=32767.0, knee=0.8):
     """
     Scale y (in place) so its RMS matches x's, then soft-limit anything above knee*limit so peaks stay within

@@ -6,3 +6,5 @@
 *.pkl
 test_resources/scripts/__pycache__/
 /dist/
+__pycache__/
+test_resources/save/
