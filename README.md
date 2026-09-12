@@ -34,9 +34,24 @@ still open; the next save writes a `.json` next to them.
 
 ## Slow-down method
 *Options → Project Options* also lets you pick the time-stretch algorithm used by the playback speed slider:
-**WSOLA** (default — overlap-add with waveform alignment), **Overlap-Add** (fastest), or
+**WSOLA** (default — overlap-add with waveform alignment, no wobble), **Overlap-Add** (fastest), or
 **Phase Vocoder**. This setting applies to all projects. Processing runs in the background — the status bar
 shows *Processing audio...* and playback switches over when it is done, keeping your position.
+
+## Metronome
+Press **M** to enter *metronome edit mode*: page/practice markers are hidden and the timeline shows only the
+green **tempo markers** and the beat grid they define (tall ticks on downbeats). In this mode:
+
+| Key                        | Function                                  |
+|----------------------------|-------------------------------------------|
+| Shift + Left Click         | Add a tempo marker (or Shift + Space at the scrubber) |
+| Right Click on marker      | Edit its tempo (bpm) and beats per bar    |
+| Ctrl/Shift + Right Click   | Remove a tempo marker                     |
+| Hold A + Drag              | Move a tempo marker                       |
+
+Each tempo marker holds until the next one, so tempo and time-signature changes are just more markers.
+**Ctrl+M** toggles the click track (level in *Options → Project Options*); the toolbar shows the current bar and
+beat. Clicks are rendered into the audio, so they stay locked to the music at any playback speed.
 
 ## How to add markers
 Page markers must be placed on the Audio Timeline in order to synchronize audio with page turns.
@@ -48,6 +63,7 @@ Clicking on the Audio Timeline with one of the corresponding combinations will a
 | Ctrl + Left Click       | Add Page Marker       |
 | Ctrl + Left/Right Click | Remove Marker        | 
 | Hold A + Drag           | Move a marker         |
+| Ctrl + Scroll Wheel     | Zoom the timeline (1x - 16x; the view scrolls and follows the scrubber) |
 
 Practice markers are used to navigate to set locations within the Audio Timeline.
 You can navigate to different markers using the following keys:

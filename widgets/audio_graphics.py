@@ -16,12 +16,14 @@ log = logging.getLogger(__name__)
 class AudioMarkerType(Enum):
     PRACTICE = 0
     PAGE = 1
+    TEMPO = 2
 
 
 class AudioMarker(QGraphicsItemGroup):
     TYPE = AudioMarkerType
     practice_color = Qt.GlobalColor.red
     page_color = Qt.GlobalColor.blue
+    tempo_color = Qt.GlobalColor.darkGreen
 
     show_marker_style = QColor(250, 0, 0, 100)
     SHOW_MARKER = True
@@ -33,11 +35,17 @@ class AudioMarker(QGraphicsItemGroup):
     _arrow_width = int(_arrow_height * 0.6)
     _vertical_inset = - int(_arrow_height * 0.5)
 
-    def __init__(self, line_index, scrubber_index,  line_width=10, marker_type=AudioMarkerType.PRACTICE):
+    def __init__(self, norm_time: float, line_width=10, marker_type=AudioMarkerType.PRACTICE):
+        """
+        :param norm_time:   position in the song, normalised to [0, 1]. This is the marker's source of truth; its
+                            scene position is derived from it by the GraphicsScene (and changes with zoom).
+        """
         super().__init__()
 
         # Setup Graphics:
-        color = self.practice_color if marker_type == AudioMarkerType.PRACTICE else self.page_color
+        color = {AudioMarkerType.PRACTICE: self.practice_color,
+                 AudioMarkerType.PAGE: self.page_color,
+                 AudioMarkerType.TEMPO: self.tempo_color}[marker_type]
         pen = QPen(Qt.GlobalColor.black, 2, Qt.PenStyle.SolidLine)
         brush = QBrush(color, Qt.BrushStyle.SolidPattern)
 
@@ -74,8 +82,12 @@ class AudioMarker(QGraphicsItemGroup):
 
         self.hitbox = hitbox
         self.marker_arrow = marker_arrow
-        self._scrubber_coords = (line_index, scrubber_index)
+        self._norm_time = float(norm_time)
         self.marker_type = marker_type
+        self._label_item = None
+        # Tempo markers: tempo in effect from this marker until the next one.
+        self.bpm: float = 120.0
+        self.beats_per_bar: int = 4
 
         self.setAcceptedMouseButtons(Qt.MouseButton.LeftButton)
         self.setAcceptHoverEvents(False)
@@ -95,13 +107,28 @@ class AudioMarker(QGraphicsItemGroup):
         return super().scene()
 
     @property
-    def scrubber_coords(self):
-        return self._scrubber_coords
+    def norm_time(self) -> float:
+        """Position in the song, normalised to [0, 1]."""
+        return self._norm_time
 
-    @scrubber_coords.setter
-    def scrubber_coords(self, coord_tuple: tuple):
-        self._scrubber_coords = coord_tuple
-        self.setPos(self.scene().scrubber_to_pos(*coord_tuple))
+    @norm_time.setter
+    def norm_time(self, value: float):
+        self._norm_time = float(max(0.0, min(1.0, value)))
+        self.update_position()
+
+    def update_position(self):
+        """Move the graphics to wherever the scene currently draws this marker's time (call after a zoom change)."""
+        scene = self.scene()
+        if scene is not None:
+            self.setPos(scene.norm_to_pos(self._norm_time))
+
+    @property
+    def scrubber_coords(self):
+        """(line_index, scrubber_index) at the scene's current zoom. Derived; kept for logging/compatibility."""
+        scene = self.scene()
+        if scene is None:
+            return 0, self._norm_time
+        return scene.norm_to_scrubber(self._norm_time)
 
     @property
     def page_index(self):
@@ -110,15 +137,24 @@ class AudioMarker(QGraphicsItemGroup):
     @page_index.setter
     def page_index(self, page_index_):
         self._page_index = int(page_index_)
+        self.set_label(str(self._page_index))
 
+    def set_tempo(self, bpm: float, beats_per_bar: int):
+        self.bpm = float(bpm)
+        self.beats_per_bar = int(beats_per_bar)
+        self.set_label(f"{self.beats_per_bar}| {self.bpm:g}")   # beats per bar | bpm
+
+    def set_label(self, text: str):
+        """Show a short text next to the arrow (page number, tempo, ...)."""
         self.clear_child_items()
-        number_graphics = QGraphicsSimpleTextItem(str(self._page_index))
-        number_graphics.setParentItem(self.marker_arrow)
-        number_graphics.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
-        number_graphics.setAcceptHoverEvents(False)
-        number_graphics.setPen(QPen(Qt.GlobalColor.black, 1))
-        number_graphics.setBrush(QBrush(Qt.GlobalColor.white))
-        number_graphics.setFont(QFont("Times", 12, QFont.Weight.Bold))
+        label = QGraphicsSimpleTextItem(text)
+        label.setParentItem(self.marker_arrow)
+        label.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        label.setAcceptHoverEvents(False)
+        label.setPen(QPen(Qt.GlobalColor.black, 1))
+        label.setBrush(QBrush(Qt.GlobalColor.white))
+        label.setFont(QFont("Times", 12, QFont.Weight.Bold))
+        self._label_item = label
 
     def setPos(self, pos: QPointF):
         marker_rect = self.hitbox.boundingRect()
@@ -132,7 +168,6 @@ class AudioMarker(QGraphicsItemGroup):
 
 
 class Scrubber(QGraphicsRectItem):
-    _scrubber_coords = (0, 0)
     _mouse_down = True
 
     def __init__(self, line_width):
@@ -143,15 +178,6 @@ class Scrubber(QGraphicsRectItem):
 
     def scene(self) -> 'GraphicsScene':
         return super().scene()
-
-    @property
-    def scrubber_coords(self):
-        return self._scrubber_coords
-
-    @scrubber_coords.setter
-    def scrubber_coords(self, coord_tuple: tuple):
-        self._scrubber_coords = coord_tuple
-        self.setPos(self.scene().scrubber_to_pos(*coord_tuple))
 
     def shape(self) -> QPainterPath:
         path = QPainterPath()

@@ -10,6 +10,7 @@ import librosa
 import numpy as np
 
 from audio_effects.time_stretch import time_stretch_audio_array, float_to_int16
+from audio_effects.metronome import mix_click_track
 
 log = logging.getLogger(__name__)
 
@@ -148,6 +149,10 @@ class AudioPlayer(QMediaPlayer):
         self._stretch_job_id = 0
         self._stretch_pending = None            # (rate, method) of the job whose result we are waiting for
         self._loaded_rate = 1.0                 # rate of the stream currently loaded in the player
+        self._loaded_audio = None               # int16 audio of the loaded stream, before the click track is mixed
+        self._tempo_map = []                    # TempoChange list (original song seconds) for the metronome
+        self._click_enabled = False
+        self._click_gain = 0.5
         self._pending_position = None   # Seek target not yet confirmed by the backend (see setPosition).
         self._pending_attempts = 0
         self._stream_ready = False      # False from setSourceDevice() until the backend reports the media loaded.
@@ -206,6 +211,64 @@ class AudioPlayer(QMediaPlayer):
 
     def playbackRate(self) -> float:
         return self._playback_rate
+
+    @property
+    def loaded_rate(self) -> float:
+        """Rate of the stream currently loaded (stream time * loaded_rate == original song time)."""
+        return self._loaded_rate
+
+    # ------------------------------------------------------------------ metronome
+    @property
+    def click_enabled(self) -> bool:
+        return self._click_enabled
+
+    @property
+    def click_gain(self) -> float:
+        return self._click_gain
+
+    def setTempoMap(self, tempo_map):
+        """Tempo changes (TempoChange, original song seconds). Re-renders the click track if it is audible."""
+        tempo_map = list(tempo_map)
+        if tempo_map == self._tempo_map:
+            return
+        self._tempo_map = tempo_map
+        if self._click_enabled:
+            self._refresh_stream()
+
+    def setClickEnabled(self, enabled: bool):
+        enabled = bool(enabled)
+        if enabled == self._click_enabled:
+            return
+        self._click_enabled = enabled
+        self._refresh_stream()
+
+    def setClickGain(self, gain: float):
+        self._click_gain = max(0.0, min(1.0, float(gain)))
+        if self._click_enabled:
+            self._refresh_stream()
+
+    def _song_duration_s(self) -> float:
+        song = self._current_song
+        if song.raw_audio is None:
+            return 0.0
+        return (song.raw_audio.shape[0] - 1) / song.sample_rate
+
+    def _with_click_track(self, audio):
+        if not self._click_enabled or not self._tempo_map or audio is None:
+            return audio
+        return mix_click_track(audio, self._current_song.sample_rate, self._tempo_map, self._song_duration_s(),
+                               rate=self._loaded_rate, gain=self._click_gain)
+
+    def _refresh_stream(self):
+        """Rebuild the playing stream from the loaded (pre-click) audio, keeping position and play state."""
+        if self._loaded_audio is None:
+            return
+        was_playing = self.isPlaying()
+        position = self.position()
+        self.create_audio_stream(self._loaded_audio, emit_audio_ready_signal=False)
+        self.setPosition(position)
+        if was_playing:
+            self.play()
 
     def setPlaybackRate(self, rate, preserve_position=True, force=False):
         """
@@ -278,10 +341,11 @@ class AudioPlayer(QMediaPlayer):
         self.buffer.close()
         self._pending_position = None
         self._stream_ready = False
+        self._loaded_audio = audio_data
 
-        # Write to an IO Stream as a wav file:
+        # Write to an IO Stream as a wav file (metronome clicks mixed in if enabled):
         f = io.BytesIO()
-        wavfile.write(f, self._current_song.sample_rate, audio_data)
+        wavfile.write(f, self._current_song.sample_rate, self._with_click_track(audio_data))
         self.buffer = QBuffer()
         self.buffer.setData(f.getvalue())
         self.setSourceDevice(self.buffer)
@@ -318,16 +382,19 @@ class AudioPlayer(QMediaPlayer):
             return
 
         target = min(self._pending_position, self.duration())
-        # Landed if we are at the target, or slightly past it (playback may have advanced since the seek).
-        if -self.SEEK_TOLERANCE_MS <= self.position() - target <= 1000:
-            log.info(f"seek to {target} confirmed ({trigger})")
-            self._pending_position = None
-            return
-
-        if self._pending_attempts >= self.MAX_SEEK_ATTEMPTS:
-            log.warning(f"giving up seeking to {target}; player reports {self.position()}")
-            self._pending_position = None
-            return
+        if self._pending_attempts > 0:
+            # Only judge "landed" after at least one seek was issued (otherwise a click slightly behind the
+            # current position would be mistaken for already being there).
+            delta = self.position() - target
+            landed = abs(delta) <= self.SEEK_TOLERANCE_MS or (self.isPlaying() and 0 <= delta <= 1000)
+            if landed:
+                log.info(f"seek to {target} confirmed ({trigger})")
+                self._pending_position = None
+                return
+            if self._pending_attempts >= self.MAX_SEEK_ATTEMPTS:
+                log.warning(f"giving up seeking to {target}; player reports {self.position()}")
+                self._pending_position = None
+                return
 
         self._pending_attempts += 1
         log.info(f"seek attempt {self._pending_attempts} to {target} ({trigger}); player at {self.position()}")

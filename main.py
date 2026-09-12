@@ -20,15 +20,16 @@ NUMBA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
 os.environ["NUMBA_CACHE_DIR"] = str(NUMBA_CACHE_DIR)
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QSlider, QFileDialog, QMessageBox, QLabel, QMenu,
-                               QDialog, QDialogButtonBox, QFormLayout, QSpinBox, QComboBox)
+                               QDialog, QDialogButtonBox, QFormLayout, QSpinBox, QComboBox, QDoubleSpinBox)
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtCore import QUrl, Qt, QPointF, Signal, QSettings
-from PySide6.QtGui import QIcon, QAction, QCloseEvent
+from PySide6.QtGui import QIcon, QAction, QCloseEvent, QKeySequence
 
 from windows.mainwindow import Ui_MainWindow
 from widgets.audio_player import AudioPlayer, Song, STRETCH_METHODS, DEFAULT_STRETCH_METHOD
 from widgets.graphics import GraphicsView, AudioMarker
 from widgets.pdf import PdfView
+from audio_effects.metronome import TempoChange, bar_beat_at
 
 DEBUG = True
 
@@ -45,6 +46,7 @@ MAX_RECENT_PROJECTS = 15
 # Application-wide (not per project) settings, stored in DATA_DIR/settings.ini
 SETTINGS_INI = DATA_DIR / 'settings.ini'
 SETTING_STRETCH_METHOD = "playback/stretch_method"
+SETTING_CLICK_GAIN = "metronome/click_gain"
 
 
 class Project:
@@ -53,16 +55,19 @@ class Project:
 
     Saved as JSON (*.json) since v0.2; older *.pkl (pickle) files are still readable.
     """
-    FORMAT_VERSION = 1
+    FORMAT_VERSION = 2      # 2: added tempo_markers
     JSON_SUFFIX = ".json"
 
-    def __init__(self, song_path, page_marker_times, practice_marker_times, pdf_path, page_offset=0):
+    def __init__(self, song_path, page_marker_times, practice_marker_times, pdf_path, page_offset=0,
+                 tempo_markers=None):
         self.song_path = song_path
         self.page_marker_times = page_marker_times
         self.practice_marker_times = practice_marker_times
         self.pdf_path = pdf_path
         # Number of leading PDF pages (cover, table of contents, ...) before the page that marker 1 turns *from*.
         self.page_offset = page_offset
+        # Metronome tempo changes: list of {"time_s", "bpm", "beats_per_bar"} in original song seconds.
+        self.tempo_markers = list(tempo_markers or [])
 
     def to_dict(self) -> dict:
         return {
@@ -72,6 +77,7 @@ class Project:
             "page_offset": int(self.page_offset),
             "page_marker_times": [float(t) for t in (self.page_marker_times or [])],
             "practice_marker_times": [float(t) for t in (self.practice_marker_times or [])],
+            "tempo_markers": [TempoChange.from_dict(c).to_dict() for c in self.tempo_markers],
         }
 
     @classmethod
@@ -84,7 +90,8 @@ class Project:
                    page_marker_times=data.get("page_marker_times", []),
                    practice_marker_times=data.get("practice_marker_times", []),
                    pdf_path=data.get("pdf_path"),
-                   page_offset=data.get("page_offset", 0))
+                   page_offset=data.get("page_offset", 0),
+                   tempo_markers=data.get("tempo_markers", []))
 
     def save(self, path: Path):
         with open(path, "w", encoding="utf-8") as f:
@@ -155,11 +162,43 @@ class GenericSlider(QSlider):
         self.end_value_signal.emit(max(0, min(value, self.MAX_VALUE)))
 
 
+class TempoMarkerDialog(QDialog):
+    """Edit one tempo marker: tempo (bpm) and beats per bar."""
+    def __init__(self, parent, bpm: float, beats_per_bar: int):
+        super().__init__(parent)
+        self.setWindowTitle("Tempo Marker")
+        self.bpm_spinbox = QDoubleSpinBox(self)
+        self.bpm_spinbox.setRange(20.0, 400.0)
+        self.bpm_spinbox.setDecimals(2)
+        self.bpm_spinbox.setSingleStep(1.0)
+        self.bpm_spinbox.setValue(bpm)
+        self.beats_spinbox = QSpinBox(self)
+        self.beats_spinbox.setRange(1, 32)
+        self.beats_spinbox.setValue(beats_per_bar)
+
+        layout = QFormLayout(self)
+        layout.addRow("Tempo (bpm):", self.bpm_spinbox)
+        layout.addRow("Beats per bar:", self.beats_spinbox)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+        self.bpm_spinbox.selectAll()
+
+    @property
+    def bpm(self) -> float:
+        return self.bpm_spinbox.value()
+
+    @property
+    def beats_per_bar(self) -> int:
+        return self.beats_spinbox.value()
+
+
 class ProjectOptionsDialog(QDialog):
     """
-    Project settings (PDF page offset) and playback settings (time stretch method).
+    Project settings (PDF page offset) and playback settings (time stretch method, metronome level).
     """
-    def __init__(self, parent, page_offset: int, n_pages: int, stretch_method: str):
+    def __init__(self, parent, page_offset: int, n_pages: int, stretch_method: str, click_gain: float):
         super().__init__(parent)
         self.setWindowTitle("Project Options")
 
@@ -178,9 +217,16 @@ class ProjectOptionsDialog(QDialog):
                                              "Applies to all projects; changing it re-processes the current song "
                                              "if a playback speed other than 100% is active.")
 
+        self.click_gain_spinbox = QSpinBox(self)
+        self.click_gain_spinbox.setRange(0, 100)
+        self.click_gain_spinbox.setSuffix(" %")
+        self.click_gain_spinbox.setValue(int(round(click_gain * 100)))
+        self.click_gain_spinbox.setToolTip("Metronome click level. Ctrl+M toggles the click, M toggles the tempo editor.")
+
         layout = QFormLayout(self)
         layout.addRow(f"PDF page offset (0 - {max(0, n_pages - 1)}):", self.page_offset_spinbox)
         layout.addRow("Slow-down method:", self.stretch_method_combo)
+        layout.addRow("Metronome volume:", self.click_gain_spinbox)
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self)
         buttons.accepted.connect(self.accept)
@@ -194,6 +240,10 @@ class ProjectOptionsDialog(QDialog):
     @property
     def stretch_method(self) -> str:
         return self.stretch_method_combo.currentData()
+
+    @property
+    def click_gain(self) -> float:
+        return self.click_gain_spinbox.value() / 100.0
 
 
 class MainWindow(QMainWindow):
@@ -221,6 +271,7 @@ class MainWindow(QMainWindow):
         if stretch_method not in STRETCH_METHODS:
             stretch_method = DEFAULT_STRETCH_METHOD
         self.audio_player.setStretchMethod(stretch_method)
+        self.audio_player.setClickGain(float(self.settings.value(SETTING_CLICK_GAIN, 0.5)))
 
         # Create Graphics:
         self.graphics_view = GraphicsView(parent=self.m_ui.audio_tab, layout=self.m_ui.horizontalLayout,
@@ -248,6 +299,7 @@ class MainWindow(QMainWindow):
         self._connect_menu()
         self._connect_audio_player()
         self._connect_graphics()
+        self._connect_metronome()
 
         self.hide_toolbar_items(True)
         self._load_recent_projects()
@@ -315,6 +367,55 @@ class MainWindow(QMainWindow):
         self.m_ui.actionAdd_Practice_Marker.triggered.connect(lambda: self.graphics_scene._add_marker_at_scrubber(None, add_practice=True))
         self.m_ui.actionAdd_Page_Marker.triggered.connect(lambda: self.graphics_scene._add_marker_at_scrubber(None, add_practice=False))
         self.graphics_scene.markers_changed_signal.connect(self.set_dirty)
+
+    def _connect_metronome(self):
+        scene = self.graphics_scene
+
+        self.actionMetronome_Mode = QAction("Metronome Edit Mode [M]", self)
+        self.actionMetronome_Mode.setCheckable(True)
+        self.actionMetronome_Mode.setShortcut(QKeySequence("M"))
+        self.actionMetronome_Mode.setToolTip("Show only tempo markers and the beat grid. Shift+click adds a tempo "
+                                             "marker, right-click edits it, Ctrl/Shift+right-click removes it.")
+        self.actionMetronome_Mode.toggled.connect(scene.set_metronome_mode)
+        scene.metronome_mode_signal.connect(self.actionMetronome_Mode.setChecked)
+
+        self.actionMetronome_Click = QAction("Metronome Click [Ctrl+M]", self)
+        self.actionMetronome_Click.setCheckable(True)
+        self.actionMetronome_Click.setShortcut(QKeySequence("Ctrl+M"))
+        self.actionMetronome_Click.setToolTip("Play a click on every beat of the tempo markers.")
+        self.actionMetronome_Click.toggled.connect(self.audio_player.setClickEnabled)
+
+        self.m_ui.menuOption.addSeparator()
+        self.m_ui.menuOption.addAction(self.actionMetronome_Mode)
+        self.m_ui.menuOption.addAction(self.actionMetronome_Click)
+
+        scene.tempo_changed_signal.connect(lambda: self.audio_player.setTempoMap(scene.tempo_map))
+        scene.tempo_marker_edit_signal.connect(self._edit_tempo_marker)
+
+        # Bar : beat readout
+        self.bar_beat_label = QLabel("Bar  -  :  -", self)
+        self.m_ui.toolBar.addSeparator()
+        self.m_ui.toolBar.addWidget(self.bar_beat_label)
+        self.audio_player.positionChanged.connect(self._update_bar_beat)
+        scene.tempo_changed_signal.connect(lambda: self._update_bar_beat(self.audio_player.position()))
+
+    def _edit_tempo_marker(self, marker):
+        dialog = TempoMarkerDialog(self, bpm=marker.bpm, beats_per_bar=marker.beats_per_bar)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.graphics_scene.set_tempo_marker(marker, dialog.bpm, dialog.beats_per_bar)
+
+    def _update_bar_beat(self, position_ms):
+        scene = self.graphics_scene
+        if not scene.tempo_markers or scene.audio_metadata is None:
+            self.bar_beat_label.setText("Bar  -  :  -")
+            return
+        # position is in (possibly stretched) stream time; the tempo map is in original song seconds
+        original_s = position_ms / 1000.0 * self.audio_player.loaded_rate
+        bar_beat = bar_beat_at(scene.tempo_map, original_s)
+        if bar_beat is None:
+            self.bar_beat_label.setText("Bar  -  :  -")
+        else:
+            self.bar_beat_label.setText(f"Bar {bar_beat[0]:3d} : {bar_beat[1]}")
 
     def _connect_tool_bar(self):
         volume_text_label = QLabel('Volume:\t', self)
@@ -426,9 +527,14 @@ class MainWindow(QMainWindow):
     def _options(self):
         dialog = ProjectOptionsDialog(self, page_offset=self.graphics_scene.page_offset,
                                       n_pages=self.graphics_scene.n_pages,
-                                      stretch_method=self.audio_player.stretch_method)
+                                      stretch_method=self.audio_player.stretch_method,
+                                      click_gain=self.audio_player.click_gain)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             self._set_page_offset(dialog.page_offset)
+            if abs(dialog.click_gain - self.audio_player.click_gain) > 1e-6:
+                self.settings.setValue(SETTING_CLICK_GAIN, dialog.click_gain)
+                self.settings.sync()
+                self.audio_player.setClickGain(dialog.click_gain)
             if dialog.stretch_method != self.audio_player.stretch_method:
                 self.settings.setValue(SETTING_STRETCH_METHOD, dialog.stretch_method)
                 self.settings.sync()
@@ -502,15 +608,14 @@ class MainWindow(QMainWindow):
 
         pdf_path = self._pdf_path
         song_path = self.audio_player.current_song.file_path
-        page_marker_times = [self.graphics_scene.scrubber_to_time(*marker.scrubber_coords)/self.graphics_scene.song_duration
-                             for marker in self.graphics_scene.page_markers]
-        practice_marker_times = [self.graphics_scene.scrubber_to_time(*marker.scrubber_coords)/self.graphics_scene.song_duration
-                              for marker in self.graphics_scene.practice_markers]
+        page_marker_times = [marker.norm_time for marker in self.graphics_scene.page_markers]
+        practice_marker_times = [marker.norm_time for marker in self.graphics_scene.practice_markers]
         project = Project(song_path=song_path,
                           page_marker_times=page_marker_times,
                           practice_marker_times=practice_marker_times,
                           pdf_path=pdf_path,
-                          page_offset=self.graphics_scene.page_offset)
+                          page_offset=self.graphics_scene.page_offset,
+                          tempo_markers=[change.to_dict() for change in self.graphics_scene.tempo_map])
         project.save(save_path)
 
         self._save_path = save_path
@@ -576,7 +681,7 @@ class MainWindow(QMainWindow):
         self.graphics_scene.page_offset = page_offset
 
         if page_marker_times is not None:
-            self.graphics_scene.set_markers(page_marker_times, practice_marker_times)
+            self.graphics_scene.set_markers(page_marker_times, practice_marker_times, project.tempo_markers)
 
         if song_path is not None:
             if Path(song_path).exists():
