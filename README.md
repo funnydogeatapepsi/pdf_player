@@ -40,38 +40,74 @@ shows *Processing audio...* and playback switches over when it is done, keeping 
 
 ## Metronome
 Press **M** to enter *metronome edit mode*: page/practice markers are hidden and the timeline shows only the
-green **tempo markers** and the beat grid they define (tall ticks on downbeats). In this mode:
-
-| Key                        | Function                                  |
-|----------------------------|-------------------------------------------|
-| Shift + Left Click         | Add a tempo marker (or Shift + Space at the scrubber) |
-| Right Click on marker      | Edit its tempo (bpm) and beats per bar    |
-| Ctrl/Shift + Right Click   | Remove a tempo marker                     |
-| Hold A + Drag              | Move a tempo marker                       |
+green **tempo markers** and the beat grid they define (tall ticks on downbeats). Add tempo markers with
+**Shift + Click**, edit one with **Right Click**, and remove one with **Ctrl/Shift + Right Click** (full list under
+[Shortcuts](#shortcuts)).
 
 Each tempo marker holds until the next one, so tempo and time-signature changes are just more markers.
 **Ctrl+M** toggles the click track (level in *Options → Project Options*); the toolbar shows the current bar and
 beat. Clicks are rendered into the audio, so they stay locked to the music at any playback speed.
 
-## How to add markers
-Page markers must be placed on the Audio Timeline in order to synchronize audio with page turns.
-Clicking on the Audio Timeline with one of the corresponding combinations will add/remove a marker:
+## Markers
+There are two kinds of marker on the Audio Timeline:
 
-| Key                     | Function              |
-|-------------------------|-----------------------|
-| Shift + Left Click      | Add Practice Marker   |
-| Ctrl + Left Click       | Add Page Marker       |
-| Ctrl + Left/Right Click | Remove Marker        | 
-| Hold A + Drag           | Move a marker         |
-| Ctrl + Scroll Wheel     | Zoom the timeline (1x - 16x; the view scrolls and follows the scrubber) |
+- **Page markers** (blue, numbered) turn the PDF to the next page. Place one wherever a page turn happens.
+- **Practice markers** (red) are bookmarks you can jump between with the arrow keys.
 
-Practice markers are used to navigate to set locations within the Audio Timeline.
-You can navigate to different markers using the following keys:
+When you jump backward while playing, playback starts 0.5 s before the marker, so pressing the key again quickly
+takes you to the marker before that one. Pressing it after that half second restarts the current section instead.
 
-| Key                 | Function               |
-|---------------------|------------------------|
-| Right/Forward Arrow | Next Practice Marker | 
-| Left/Back Arrow     | Previous Practice Marker     | 
-| Up Arrow            | Next Page Marker   |
-| Down Arrow          | Previous Page Marker   | 
+## Shortcuts
 
+### Playback and navigation
+| Shortcut        | Action                                   |
+|-----------------|------------------------------------------|
+| Space           | Play / pause                             |
+| Right Arrow     | Jump to the next practice marker         |
+| Left Arrow      | Jump to the previous practice marker     |
+| Up Arrow        | Jump to the next page marker (next page) |
+| Down Arrow      | Jump to the previous page marker         |
+| Click / drag on the timeline | Move the playback position  |
+
+### Adding, moving and removing markers
+| Shortcut                          | Action                                                   |
+|-----------------------------------|----------------------------------------------------------|
+| Shift + Click on the timeline     | Add a practice marker there                              |
+| Ctrl + Click on the timeline      | Add a page marker there                                  |
+| Shift + Space                     | Add a practice marker at the playback position           |
+| Ctrl + Space                      | Add a page marker at the playback position               |
+| Hold A + drag a marker            | Move it                                                  |
+| Ctrl + Right Click or Shift + Right Click on a marker | Remove it                            |
+| Alt + Right Arrow / Alt + Left Arrow | Remove the next / previous practice marker            |
+| Alt + Up Arrow / Alt + Down Arrow | Remove the next / previous page marker                   |
+| Shift + Delete                    | Remove all markers                                       |
+
+Shift + Click or Ctrl + Click on the empty area around the timeline lines adds the marker at the playback position
+instead of where you clicked.
+
+### Metronome
+| Shortcut                          | Action                                                   |
+|-----------------------------------|----------------------------------------------------------|
+| M                                 | Turn metronome edit mode on / off                        |
+| Ctrl + M                          | Turn the metronome click on / off                        |
+| Shift + Click / Shift + Space     | Add a tempo marker (in metronome edit mode)              |
+| Right Click on a tempo marker     | Edit its tempo and beats per bar (in metronome edit mode)|
+
+In metronome edit mode, Ctrl + Click and Ctrl + Space don't add page markers; moving and removing work the same
+as for other markers.
+
+### View
+| Shortcut                          | Action                                                   |
+|-----------------------------------|----------------------------------------------------------|
+| F                                 | Fullscreen on / off                                      |
+| Ctrl + Scroll Wheel on the timeline | Zoom the timeline (1x to 16x)                          |
+| Ctrl + Scroll Wheel on the PDF    | Change the page offset (scroll down = skip one more leading page) |
+
+### Files
+| Shortcut          | Action          |
+|-------------------|-----------------|
+| Ctrl + O          | Open project    |
+| Ctrl + S          | Save project    |
+| Ctrl + Shift + S  | Save project as |
+| Ctrl + K          | Import audio    |
+| Ctrl + I          | Import PDF      |

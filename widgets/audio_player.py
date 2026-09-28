@@ -6,7 +6,7 @@ from PySide6.QtCore import QUrl, QBuffer, Signal, QObject, QRunnable, QThreadPoo
 from tinytag import TinyTag
 import io
 from scipy.io import wavfile
-import librosa
+import av
 import numpy as np
 
 from audio_effects.time_stretch import time_stretch_audio_array, float_to_int16
@@ -53,6 +53,32 @@ class Song:
     # Leaves a little headroom so the time-stretched output does not clip.
     PEAK_LEVEL = 0.9
 
+    @staticmethod
+    def decode(file_path):
+        """
+        Decode an audio file to (n_samples, 2) int16 at its native sample rate.
+
+        Uses PyAV (ffmpeg), which handles everything the import dialog offers - including m4a/AAC, which
+        libsndfile cannot read. Mono files are upmixed to stereo by the resampler.
+
+        :return: (int16 array of shape (n_samples, 2), sample_rate)
+        """
+        with av.open(file_path) as container:
+            if not container.streams.audio:
+                raise ValueError(f"No audio stream in {file_path}")
+            stream = container.streams.audio[0]
+            sample_rate = stream.codec_context.sample_rate
+            # s16p = planar signed 16-bit, so to_ndarray() gives (n_channels, n_samples).
+            # (packed 's16' would interleave the channels into a single row instead.)
+            resampler = av.audio.resampler.AudioResampler(format="s16p", layout="stereo", rate=sample_rate)
+            chunks = []
+            for frame in container.decode(audio=0):
+                chunks.extend(out.to_ndarray() for out in resampler.resample(frame))
+            chunks.extend(out.to_ndarray() for out in resampler.resample(None))     # flush the resampler
+        if not chunks:
+            raise ValueError(f"No audio decoded from {file_path}")
+        return np.concatenate(chunks, axis=1).T, sample_rate
+
     def read_data(self):
         """
         Read audio file. Audio is always stored as (n_samples, n_channels) int16 with at least 2 channels;
@@ -60,15 +86,17 @@ class Song:
 
         :return:
         """
-        raw_audio, sample_rate = librosa.load(self.file_path, sr=None, mono=False)
-        raw_audio = np.atleast_2d(raw_audio).T          # -> (n_samples, n_channels)
-        if raw_audio.shape[1] == 1:
-            raw_audio = np.repeat(raw_audio, 2, axis=1)  # mono -> stereo
+        raw_audio, sample_rate = self.decode(self.file_path)
+        raw_audio = raw_audio.astype(np.float64) / np.iinfo(np.int16).max
         peak = np.abs(raw_audio).max()
         if peak > 0:
             raw_audio = raw_audio / peak * self.PEAK_LEVEL
         self.raw_audio = (raw_audio * np.iinfo(np.int16).max).astype(np.int16)
         self.sample_rate = sample_rate
+        # The decoded length is the authority, not the container metadata: lossy formats (AAC especially)
+        # decode to slightly more samples than their nominal duration, and the timeline / markers are laid
+        # out against the audio that is actually played.
+        self.metadata.duration = (self.raw_audio.shape[0] - 1) / sample_rate
 
     @staticmethod
     def stretch(raw_audio, sample_rate, rate=1.0, method="wsola"):

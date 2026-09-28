@@ -106,6 +106,7 @@ class GraphicsScene(QGraphicsScene):
 
     TIME_TOL_LOW_MS = 30
     TIME_TOL_HIGH_MS = 500
+    ON_MARKER_TOL_MS = 5
     START_MARKER = AudioMarker(norm_time=0.0, line_width=line_width)
     END_MARKER = AudioMarker(norm_time=0.9999, line_width=line_width)
 
@@ -435,13 +436,14 @@ class GraphicsScene(QGraphicsScene):
         return marker_list
 
     def get_next_page_marker(self):
+        """The page marker that turns to the next page, or END_MARKER when already on the last page."""
         if self._n_page_markers == 0:
             return self.END_MARKER
 
-        self.active_page_marker_index = min(self._calc_marker_index(marker_type=AudioMarker.TYPE.PAGE, next_marker=True),
-                                            self._n_page_markers - 1)
-        marker = self.page_markers[self.active_page_marker_index - 1]
-        return marker
+        next_page = max(1, self._calc_marker_index(marker_type=AudioMarker.TYPE.PAGE, next_marker=True))
+        if next_page > self._n_page_markers:
+            return self.END_MARKER
+        return self.page_markers[next_page - 1]
 
     def get_previous_page_marker(self):
         if self._n_page_markers == 0:
@@ -545,7 +547,9 @@ class GraphicsScene(QGraphicsScene):
             if marker_type == AudioMarker.TYPE.PRACTICE:
                 marker_inds -= 1
 
-            err_tol = 1e-3 / self.BASE_N_LINES       # "on the marker" tolerance, independent of zoom
+            err_tol = self.ON_MARKER_TOL_MS / self.song_duration
+            # ^ "on the marker" tolerance, independent of zoom,  ms -> normalised; independent of song length
+
             marker_error = scrubber_coord - marker_coords
             argmin_error = np.argmin(marker_error ** 2)     # Find nearest marker
             marker_candidate = marker_inds[argmin_error]

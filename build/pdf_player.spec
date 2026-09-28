@@ -1,16 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Build from the repo root with:  pyinstaller build/pdf_player.spec
-import os
 
-spec_dir = os.path.dirname(os.path.abspath(SPEC))
-repo_root = os.path.dirname(spec_dir)
 
 a = Analysis(
-    [os.path.join(repo_root, 'main.py')],
-    pathex=[repo_root],
+    ['E:\\developer\\repos\\pdf_player\\main.py'],
+    pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=['rocket_fft', 'numpy.fft'],
+    hiddenimports=['numpy.fft'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
