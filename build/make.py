@@ -1,11 +1,13 @@
 """
-Build a single-file executable with PyInstaller.
+Build the single-file executable locally.
 
-Either run this script, or from the repo root run:
+Run from anywhere:  python build/make.py
 
-    pyinstaller build/pdf_player.spec
+This builds FROM build/pdf_player.spec - the same spec GitHub Actions uses - so local and CI builds match.
+It must not regenerate the spec: a generated spec contains absolute paths from this machine, which breaks CI.
+Change build options (hidden imports, data files, ...) in pdf_player.spec, not here.
 
-The GitHub Actions workflow (.github/workflows/build.yml) does the same thing on every tag push.
+Output: build/dist/pdf_player.exe
 """
 from pathlib import Path
 
@@ -14,11 +16,8 @@ import PyInstaller.__main__
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 PyInstaller.__main__.run([
-    str(REPO_ROOT / 'main.py'),
-    '--onefile',
-    '--name=pdf_player',
-    '--hidden-import=numpy.fft',
+    str(REPO_ROOT / 'build' / 'pdf_player.spec'),
+    '--noconfirm',
     '--distpath', str(REPO_ROOT / 'build' / 'dist'),
     '--workpath', str(REPO_ROOT / 'build' / 'build'),
-    '--specpath', str(REPO_ROOT / 'build'),
 ])

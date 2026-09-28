@@ -4,6 +4,8 @@ from typing import Literal
 
 import numpy as np
 from numba import njit, prange
+import rocket_fft  # noqa: F401 - registers np.fft support inside @njit (numba normally finds it via package
+                   # metadata, which PyInstaller does not bundle - so import it explicitly)
 
 log = logging.getLogger(__name__)
 

@@ -1,12 +1,22 @@
 # -*- mode: python ; coding: utf-8 -*-
+# The one build definition for both CI (pyinstaller build/pdf_player.spec) and local builds (python build/make.py).
+# Edit this file by hand; never let PyInstaller regenerate it - a generated spec contains absolute paths from
+# the machine that generated it, which breaks the GitHub build.
+import os
+from PyInstaller.utils.hooks import collect_dynamic_libs
 
+spec_dir = os.path.dirname(os.path.abspath(SPEC))
+repo_root = os.path.dirname(spec_dir)
 
 a = Analysis(
-    ['E:\\developer\\repos\\pdf_player\\main.py'],
-    pathex=[],
-    binaries=[],
+    [os.path.join(repo_root, 'main.py')],
+    pathex=[repo_root],
+    # rocket_fft locates its compiled helpers by globbing the filesystem and loads them with ctypes/llvmlite,
+    # so PyInstaller's import analysis can't see them. Without these, np.fft inside @njit (the phase vocoder)
+    # fails to compile in the exe.
+    binaries=collect_dynamic_libs('rocket_fft', search_patterns=['_*.pyd', '_*.so']),
     datas=[],
-    hiddenimports=['numpy.fft'],
+    hiddenimports=['rocket_fft', 'numpy.fft'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
